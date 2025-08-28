@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-private xmlns="http://www.netbeans.org/ns/project-private/1">
+    <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/2025_08_17_152429_create_services_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/0001_01_01_000000_create_users_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/2025_08_17_152440_create_stylist_services_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/app/Models/Booking.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/0001_01_01_000001_create_cache_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/0001_01_01_000002_create_jobs_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/2025_08_17_152424_create_categories_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/resources/views/services/list.blade.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/2025_08_17_152433_create_stylists_table.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/.env</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/resources/views/services/show.blade.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/resources/views/category/index.blade.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/resources/views/layout/app.blade.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/app/Http/Controllers/CategoryController.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/app/Http/Controllers/BookingController.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/resources/views/home.blade.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/app/Models/Category.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/app/Http/Controllers/ServiceController.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/app/Http/Controllers/HomeController.php</file>
+            <file>file:/C:/xampp/htdocs/salon_assigment/database/migrations/2025_08_17_152436_create_bookings_table.php</file>
+        </group>
+    </open-files>
+</project-private>
