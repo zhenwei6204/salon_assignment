@@ -439,6 +439,8 @@
         .container-footer{
             background-color: black;
         }
+
+        
     </style>
 </head>
 <body>
@@ -454,8 +456,6 @@
 
                 {{-- 👇 Auth links --}}
                 @auth
-                    <li><a href="{{ route('dashboard') }}">Dashboard</a></li>
-
                     {{-- Profile dropdown --}}
                     <li class="profile-menu">
                         <button type="button" class="profile-toggle" id="profileToggle">

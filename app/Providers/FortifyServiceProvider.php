@@ -14,7 +14,9 @@ use Illuminate\Support\Str;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Fortify;
 use App\Providers\LoginResponse;
+use App\Providers\RegisterResponse;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 
 class FortifyServiceProvider extends ServiceProvider
 {
@@ -23,7 +25,11 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register()
     {
+            // after login -> go to '/'
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+
+        // after register -> log out + go to '/login'
+        $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
     }
 
     /**
@@ -47,5 +53,7 @@ class FortifyServiceProvider extends ServiceProvider
         RateLimiter::for('two-factor', function (Request $request) {
             return Limit::perMinute(5)->by($request->session()->get('login.id'));
         });
+
+        Fortify::redirects('register', '/login');
     }
 }
