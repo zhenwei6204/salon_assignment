@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="container">
-    <!-- Success Header -->
+    <!-- Success Headerrrrrrrrrrrrrrrrrrrrrrrrrrrrrr -->
     <div class="success-header">
         <div class="success-icon">✅</div>
         <h1>Booking Confirmed!</h1>
