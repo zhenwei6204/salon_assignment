@@ -5,7 +5,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BookingController;
-
+use App\Models\Stylist;
 
 
 // Categories page
@@ -67,3 +67,5 @@ Route::middleware([
         return view('dashboard');
     })->name('dashboard');
 });
+
+
