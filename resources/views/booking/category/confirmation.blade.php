@@ -93,7 +93,8 @@
         <!-- Customer Information Form -->
         <div class="customer-info-section">
             <h3>📋 Your Information</h3>
-            <form method="POST" action="{{ route('booking.store') }}" class="customer-form">
+         <form method="POST" action="{{ route('booking.confirmation.process') }}" class="customer-form">
+
                 @csrf
                 <input type="hidden" name="service_id" value="{{ $service->id }}">
                 <input type="hidden" name="stylist_id" value="{{ $stylist->id }}">

@@ -4,13 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
 
 class Booking extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
+     protected $fillable = [
         'service_id',
         'stylist_id',
         'customer_name',
@@ -21,39 +20,80 @@ class Booking extends Model
         'end_time',
         'total_price',
         'status',
-        'notes'
+        'booking_reference',
+        'special_requests',
+        'notes',
+        'payment_id',
     ];
+
 
     protected $casts = [
         'booking_date' => 'date',
-        'total_price' => 'decimal:2',
+        'booking_time' => 'datetime',
+        'end_time' => 'datetime',
+        'total_price' => 'decimal:2'
     ];
 
-    public function service()
+      public function service()
     {
         return $this->belongsTo(Service::class);
     }
 
-    public function stylist()
+   public function stylist()
     {
         return $this->belongsTo(Stylist::class);
     }
-
-    // Accessor for formatted date
-    public function getFormattedDateAttribute()
+   public function payment()
     {
-        return $this->booking_date->format('l, F j, Y');
+        return $this->belongsTo(Payment::class, 'payment_id');
     }
 
-    // Accessor for formatted time
-    public function getFormattedTimeAttribute()
+
+    /**
+     * Check if booking has payment
+     */
+    public function hasPayment()
     {
-        return Carbon::parse($this->booking_time)->format('g:i A');
+        return $this->payment !== null;
     }
 
-    // Accessor for formatted end time
-    public function getFormattedEndTimeAttribute()
+    /**
+     * Get payment status for this booking
+     */
+    public function getPaymentStatusAttribute()
     {
-        return $this->end_time ? Carbon::parse($this->end_time)->format('g:i A') : null;
+        return $this->payment?->status ?? 'no_payment';
+    }
+
+    /**
+     * Get payment method for this booking
+     */
+    public function getPaymentMethodAttribute()
+    {
+        return $this->payment?->payment_method ?? null;
+    }
+
+    /**
+     * Check if booking is fully paid
+     */
+    public function isPaid()
+    {
+        return $this->payment && $this->payment->isCompleted();
+    }
+
+    /**
+     * Check if payment is pending
+     */
+    public function isPaymentPending()
+    {
+        return $this->payment && $this->payment->isPending();
+    }
+
+    /**
+     * Get formatted booking status
+     */
+    public function getFormattedStatusAttribute()
+    {
+        return ucfirst(str_replace('_', ' ', $this->status));
     }
 }

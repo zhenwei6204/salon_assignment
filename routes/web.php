@@ -1,12 +1,12 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\HomeController; 
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\PaymentController;
 use App\Models\Stylist;
-
 
 // Categories page
 Route::get('/categories', function () {
@@ -22,13 +22,13 @@ Route::get('/about', function () {
 Route::get('/contact', function () {
     return view('contact');
 });
-Route::get('/', [App\Http\Controllers\HomeController::class, 'home']); 
+
+Route::get('/', [App\Http\Controllers\HomeController::class, 'home']);
 
 Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
 Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
 Route::get('/services/{service}', [ServiceController::class, 'show'])->name('services.show');
 
-// Booking routes
 Route::prefix('booking')->name('booking.')->group(function () {
     // Step 1: Select stylist
     Route::get('/service/{service}/stylists', [BookingController::class, 'selectStylist'])
@@ -42,9 +42,15 @@ Route::prefix('booking')->name('booking.')->group(function () {
     Route::get('/service/{service}/stylist/{stylist}/confirmation', [BookingController::class, 'confirmation'])
         ->name('confirmation');
     
-    // Step 4: Store booking
-    Route::post('/store', [BookingController::class, 'store'])
-        ->name('store');
+    // Step 4: Process confirmation form and redirect to payment
+    Route::post('/confirmation/process', [BookingController::class, 'processConfirmation'])
+        ->name('confirmation.process');
+    
+    // Step 5: Payment routes (handled by PaymentController)
+    Route::get('/payment/{serviceId}', [PaymentController::class, 'makePayment'])
+        ->name('payment.makePayment');
+    Route::post('/payment/{serviceId}/process', [PaymentController::class, 'processPayment'])
+        ->name('payment.process');
     
     // Success page
     Route::get('/success/{booking}', [BookingController::class, 'success'])
@@ -53,10 +59,6 @@ Route::prefix('booking')->name('booking.')->group(function () {
 
 // Route for selecting a stylist
 Route::get('/services/{service}/book', [BookingController::class, 'selectStylist'])->name('booking.stylists');
-
-
-
-
 
 Route::middleware([
     'auth:sanctum',
@@ -67,5 +69,3 @@ Route::middleware([
         return view('dashboard');
     })->name('dashboard');
 });
-
-

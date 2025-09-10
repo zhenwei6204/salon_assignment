@@ -6,6 +6,7 @@ use App\Models\Service;
 use App\Models\Stylist;
 use App\Models\Booking;
 use Illuminate\Http\Request;
+use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -54,20 +55,20 @@ class BookingController extends Controller
     }
     
     /**
-     * Step 2: Select date and time
+     * Step 2: Select time slot
      */
     public function selectTime(Request $request, Service $service, Stylist $stylist)
     {
         try {
             $selectedDate = $request->get('date', now()->format('Y-m-d'));
-            
+
             // Validate date is not in the past
             if (Carbon::parse($selectedDate)->isPast() && !Carbon::parse($selectedDate)->isToday()) {
                 $selectedDate = now()->format('Y-m-d');
             }
-            
+
             $availableSlots = $this->getAvailableTimeSlots($service, $stylist, $selectedDate);
-            
+
             return view('booking.category.times', [
                 'service' => $service,
                 'stylist' => $stylist,
@@ -81,14 +82,14 @@ class BookingController extends Controller
                 'selected_date' => $selectedDate ?? 'N/A',
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return redirect()->route('booking.select.stylist', $service)
-                           ->with('error', 'Unable to load available times. Please try again.');
+                ->with('error', 'Unable to load available times. Please try again.');
         }
     }
-    
+
     /**
-     * Step 3: Show booking confirmation
+     * Step 3: Show confirmation page before payment
      */
     public function confirmation(Request $request, Service $service, Stylist $stylist)
     {
@@ -100,25 +101,37 @@ class BookingController extends Controller
 
             if ($validator->fails()) {
                 return redirect()->route('booking.select.time', [$service, $stylist])
-                               ->withErrors($validator)
-                               ->with('error', 'Please select a valid date and time.');
+                    ->withErrors($validator)
+                    ->with('error', 'Please select a valid date and time.');
             }
-            
+
             $selectedDate = $request->get('date');
             $selectedTime = $request->get('time');
-            
+
             // Calculate end time based on service duration
             $startDateTime = Carbon::parse($selectedDate . ' ' . $selectedTime);
             $endDateTime = $startDateTime->copy()->addMinutes($service->duration);
-            
+
             // Check if slot is still available
             $isAvailable = $this->checkSlotAvailability($stylist, $selectedDate, $selectedTime, $endDateTime->format('H:i:s'));
-            
+
             if (!$isAvailable) {
                 return redirect()->route('booking.select.time', [$service, $stylist])
-                               ->with('error', 'This time slot is no longer available. Please select another time.');
+                    ->with('error', 'This time slot is no longer available. Please select another time.');
             }
-            
+
+            // Store booking details in session for payment processing
+            $bookingDetails = [
+                'service' => $service,
+                'stylist' => $stylist,
+                'selectedDate' => $selectedDate,
+                'selectedTime' => $selectedTime,
+                'endDateTime' => $endDateTime
+            ];
+
+            $request->session()->put('booking_details', $bookingDetails);
+
+            // Return the CORRECT confirmation view
             return view('booking.category.confirmation', [
                 'service' => $service,
                 'stylist' => $stylist,
@@ -126,6 +139,7 @@ class BookingController extends Controller
                 'selectedTime' => $selectedTime,
                 'endDateTime' => $endDateTime
             ]);
+
         } catch (\Exception $e) {
             Log::error('Error in confirmation: ' . $e->getMessage(), [
                 'service_id' => $service->id,
@@ -133,215 +147,119 @@ class BookingController extends Controller
                 'request_data' => $request->all(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
-            return redirect()->route('booking.select.time', [$service, $stylist])
-                           ->with('error', 'Unable to process confirmation. Please try again.');
-        }
-    }
-    
-    /**
-     * Step 4: Store the booking
-     */
-    public function store(Request $request)
-    {
-        try {
-            // Enhanced validation with custom messages
-            $validator = Validator::make($request->all(), [
-                'service_id' => 'required|exists:services,id',
-                'stylist_id' => 'required|exists:stylists,id',
-                'booking_date' => 'required|date|after_or_equal:today',
-                'booking_time' => 'required|date_format:H:i:s',
-                'customer_name' => 'required|string|max:255|min:2',
-                'customer_email' => 'required|email|max:255',
-                'customer_phone' => 'required|string|max:20|min:10',
-                'special_requests' => 'nullable|string|max:1000'
-            ], [
-                'service_id.exists' => 'The selected service is not available.',
-                'stylist_id.exists' => 'The selected stylist is not available.',
-                'booking_date.after_or_equal' => 'Booking date must be today or in the future.',
-                'booking_time.date_format' => 'Please select a valid time slot.',
-                'customer_name.min' => 'Name must be at least 2 characters.',
-                'customer_phone.min' => 'Phone number must be at least 10 digits.',
-                'special_requests.max' => 'Special requests cannot exceed 1000 characters.'
-            ]);
 
-            if ($validator->fails()) {
-                Log::warning('Booking validation failed', [
-                    'errors' => $validator->errors()->toArray(),
-                    'request_data' => $request->except(['_token'])
-                ]);
-                
-                return redirect()->back()
-                               ->withErrors($validator)
-                               ->withInput()
-                               ->with('error', 'Please correct the errors below.');
-            }
-            
-            // Load models with error checking
-            $service = Service::find($request->service_id);
-            $stylist = Stylist::find($request->stylist_id);
-            
-            if (!$service || !$stylist) {
-                Log::error('Service or Stylist not found', [
-                    'service_id' => $request->service_id,
-                    'stylist_id' => $request->stylist_id
-                ]);
-                
-                return redirect()->route('categories.index')
-                               ->with('error', 'The selected service or stylist is no longer available.');
-            }
-            
-            // Check if service duration is valid
-            if (!$service->duration || $service->duration <= 0) {
-                Log::error('Invalid service duration', [
-                    'service_id' => $service->id,
-                    'duration' => $service->duration
-                ]);
-                
-                return redirect()->back()
-                               ->with('error', 'Service configuration error. Please contact support.')
-                               ->withInput();
-            }
-            
-            // Calculate end time
-            $startDateTime = Carbon::parse($request->booking_date . ' ' . $request->booking_time);
-            $endDateTime = $startDateTime->copy()->addMinutes($service->duration);
-            
-            // Validate booking is within business hours
-            if (!$this->isWithinBusinessHours($startDateTime, $endDateTime)) {
-                return redirect()->back()
-                               ->with('error', 'Selected time is outside business hours.')
-                               ->withInput();
-            }
-            
-            // Double-check availability before booking
-            $isAvailable = $this->checkSlotAvailability(
-                $stylist, 
-                $request->booking_date, 
-                $request->booking_time, 
-                $endDateTime->format('H:i:s')
-            );
-            
-            if (!$isAvailable) {
-                Log::warning('Time slot no longer available during booking', [
-                    'stylist_id' => $stylist->id,
-                    'booking_date' => $request->booking_date,
-                    'booking_time' => $request->booking_time
-                ]);
-                
-                return redirect()->route('booking.select.time', [$service, $stylist])
-                               ->with('error', 'This time slot is no longer available. Please select another time.');
-            }
-            
-            // Generate booking reference
-            $bookingReference = $this->generateBookingReference();
-            if (!$bookingReference) {
-                throw new \Exception('Failed to generate booking reference');
-            }
-            
-            // Use database transaction to ensure data consistency
-            DB::beginTransaction();
-            
-            $bookingData = [
-                'service_id' => $request->service_id,
-                'stylist_id' => $request->stylist_id,
-                'customer_name' => trim($request->customer_name),
-                'customer_email' => strtolower(trim($request->customer_email)),
-                'customer_phone' => trim($request->customer_phone),
-                'booking_date' => $request->booking_date,
-                'booking_time' => $request->booking_time,
-                'end_time' => $endDateTime->format('H:i:s'),
-                'total_price' => $service->price,
-                'status' => 'confirmed',
-                'booking_reference' => $bookingReference,
-                'special_requests' => $request->special_requests ? trim($request->special_requests) : null,
-                'created_at' => now(),
-                'updated_at' => now()
-            ];
-            
-            Log::info('Creating booking with data', $bookingData);
-            
-            $booking = Booking::create($bookingData);
-            
-            if (!$booking) {
-                throw new \Exception('Failed to create booking record');
-            }
-            
-            DB::commit();
-            
-            Log::info('Booking created successfully', [
-                'booking_id' => $booking->id,
-                'booking_reference' => $booking->booking_reference
-            ]);
-            
-            // TODO: Send confirmation email to customer
-            // try {
-            //     Mail::to($booking->customer_email)->send(new BookingConfirmation($booking));
-            // } catch (\Exception $emailError) {
-            //     Log::warning('Failed to send confirmation email', [
-            //         'booking_id' => $booking->id,
-            //         'error' => $emailError->getMessage()
-            //     ]);
-            // }
-            
-            return redirect()->route('booking.success', $booking)
-                           ->with('success', 'Your booking has been confirmed!');
-                           
-        } catch (\Illuminate\Database\QueryException $e) {
-            DB::rollback();
-            
-            Log::error('Database error during booking creation', [
-                'error' => $e->getMessage(),
-                'code' => $e->getCode(),
-                'request_data' => $request->except(['_token'])
-            ]);
-            
-            // Check for common database issues
-            if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
-                return redirect()->back()
-                               ->with('error', 'A booking with these details already exists.')
-                               ->withInput();
-            }
-            
-            return redirect()->back()
-                           ->with('error', 'Database error occurred. Please try again or contact support.')
-                           ->withInput();
-                           
-        } catch (\Exception $e) {
-            DB::rollback();
-            
-            Log::error('Unexpected error during booking creation', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request_data' => $request->except(['_token'])
-            ]);
-            
-            return redirect()->back()
-                           ->with('error', 'An unexpected error occurred. Please try again or contact support if the problem persists.')
-                           ->withInput();
+            return redirect()->route('booking.select.time', [$service, $stylist])
+                ->with('error', 'Unable to process confirmation. Please try again.');
         }
     }
+    public function processConfirmation(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'service_id' => 'required|exists:services,id',
+        'stylist_id' => 'required|exists:stylists,id',
+        'booking_date' => 'required|date|after_or_equal:today',
+        'booking_time' => 'required|date_format:H:i:s',
+        'customer_name' => 'required|string|max:255|min:2',
+        'customer_email' => 'required|email|max:255',
+        'customer_phone' => 'required|string|max:20|min:10',
+        'special_requests' => 'nullable|string|max:1000'
+    ]);
+
+    if ($validator->fails()) {
+        return redirect()->back()->withErrors($validator)->withInput()->with('error', 'Please correct the errors below.');
+    }
+
+    $service = Service::findOrFail($request->service_id);
+    $stylist = Stylist::findOrFail($request->stylist_id);
+
+    // --- Start Database Transaction ---
+  DB::beginTransaction();
+try {
+    // Step 1: Create the booking using the Query Builder.
+    $bookingId = DB::table('bookings')->insertGetId([
+        'service_id' => $service->id,
+        'stylist_id' => $stylist->id,
+        'customer_name' => $request->customer_name,
+        'customer_email' => $request->customer_email,
+        'customer_phone' => $request->customer_phone,
+        'booking_date' => $request->booking_date,
+        'booking_time' => $request->booking_time,
+        'end_time' => Carbon::parse($request->booking_date . ' ' . $request->booking_time)->addMinutes($service->duration)->format('H:i:s'),
+        'total_price' => $service->price,
+        'status' => 'pending_payment',
+        'booking_reference' => $this->generateBookingReference(),
+        'special_requests' => $request->special_requests,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Step 2: Create the payment using the Query Builder.
+    $paymentId = DB::table('payments')->insertGetId([
+        'booking_id' => $bookingId,
+        'amount' => $service->price,
+        'status' => 'pending',
+        'payment_method' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Step 3: Link the payment back to the booking.
+    DB::table('bookings')->where('id', $bookingId)->update([
+        'payment_id' => $paymentId
+    ]);
+
+    // If all three steps succeeded, commit the transaction.
+    DB::commit();
+
+    // Step 4: Store details in session for the payment page
+    $bookingDetails = array_merge($request->session()->get('booking_details', []), [
+        'booking_id' => $bookingId,
+        'payment_id' => $paymentId,
+        'service' => $service,
+        'stylist' => $stylist,
+        'customer_name' => $request->customer_name,
+        'customer_email' => $request->customer_email,
+        'customer_phone' => $request->customer_phone,
+        'special_requests' => $request->special_requests,
+        'selectedDate' => $request->booking_date,
+        'selectedTime' => $request->booking_time
+    ]);
+    $request->session()->put('booking_details', $bookingDetails);
+
+    return redirect()->route('booking.payment.makePayment', ['serviceId' => $service->id]);
+
+} catch (\Exception $e) {
+    DB::rollBack();
+    Log::error('A critical database error occurred in processConfirmation: ' . $e->getMessage(), [
+        'trace' => $e->getTraceAsString()
+    ]);
+    return redirect()->back()
+        ->with('error', 'Unable to process your booking due to a critical system error. Please contact support.')
+        ->withInput();
+}
+}
     
-    /**
-     * Show booking success page
-     */
     public function success(Booking $booking)
-    {
-        try {
-            // Load relationships
-            $booking->load(['service', 'stylist']);
-            
-            return view('booking.category.success', compact('booking'));
-        } catch (\Exception $e) {
-            Log::error('Error loading success page', [
-                'booking_id' => $booking->id ?? 'unknown',
-                'error' => $e->getMessage()
-            ]);
-            
-            return redirect()->route('categories.index')
-                           ->with('error', 'Unable to display booking confirmation. Please contact support with your booking reference.');
-        }
+{
+    try {
+        // Load relationships including payment
+        $booking->load(['service', 'stylist', 'payment']);
+        
+        // Get payment result from session if available
+        $paymentResult = session()->get('payment_result');
+        session()->forget('payment_result'); // Clear after use
+        
+        return view('booking.category.success', compact('booking', 'paymentResult'));
+    } catch (\Exception $e) {
+        Log::error('Error loading success page', [
+            'booking_id' => $booking->id ?? 'unknown',
+            'error' => $e->getMessage()
+        ]);
+        
+        return redirect()->route('categories.index')
+                       ->with('error', 'Unable to display booking confirmation. Please contact support with your booking reference.');
     }
+}
     
     /**
      * Check if booking time is within business hours
