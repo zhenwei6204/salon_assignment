@@ -15,7 +15,7 @@ CREATE TABLE categories (
 CREATE TABLE services (
     id INT AUTO_INCREMENT PRIMARY KEY,
     category_id INT,
-    name VARCHAR(150) NOT NULL,
+    name VARCHAR(150) NOT NULL,..
     description TEXT,
     benefits TEXT,
     price DECIMAL(10,2) NOT NULL,
