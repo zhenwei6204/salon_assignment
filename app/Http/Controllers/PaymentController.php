@@ -39,149 +39,196 @@ class PaymentController extends Controller
                     ->with('error', 'Session expired or missing booking details. Please start again.');
             }
 
-            // Verify the booking exists
-            $booking = Booking::find($bookingDetails['booking_id']);
+            // Verify the booking exists and load its relationships
+            $booking = Booking::with(['stylist', 'service'])->find($bookingDetails['booking_id']);
             if (!$booking) {
                 Log::error('Booking not found:', ['booking_id' => $bookingDetails['booking_id']]);
                 return redirect()->route('booking.select.stylist', ['service' => $serviceId])
                     ->with('error', 'Booking not found. Please start again.');
             }
 
-            // Get all available payment methods
+            // FIX: Ensure the stylist data in the session is a proper object,
+            // which will resolve the "Attempt to read property 'name' on array" error.
+            if ($booking->stylist) {
+                $bookingDetails['stylist'] = $booking->stylist;
+                session()->put('booking_details', $bookingDetails);
+            }
+
+            // Get all available payment methods from the PaymentContext
             $availablePaymentMethods = $this->paymentContext->getAvailablePaymentMethods();
 
+            Log::debug('Payment page data:', [
+                'booking_details_keys' => array_keys($bookingDetails),
+                'has_stylist' => isset($bookingDetails['stylist']),
+                'booking_id' => $booking->id,
+                'stylist_name' => $booking->stylist->name ?? 'N/A'
+            ]);
+
+            // Pass all necessary data to the view, including the bookingDetails variable
             return view('payment.payment', [
                 'service' => $service,
                 'booking' => $booking,
                 'bookingDetails' => $bookingDetails,
-                'availablePaymentMethods' => $availablePaymentMethods
+                'availablePaymentMethods' => $availablePaymentMethods,
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Error accessing payment page: ' . $e->getMessage());
+            Log::error('Error accessing payment page: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
             return redirect()->route('services.show', $serviceId)
                 ->with('error', 'Unable to access payment page. Please try again.');
         }
     }
 
-    /**
-     * Process payment using Strategy Pattern - ONLY UPDATES EXISTING RECORDS
-     */
-    public function processPayment(Request $request, $serviceId)
-    {
-        DB::beginTransaction();
+   /**
+ * Process the payment and update the booking record.
+ */
+public function processPayment(Request $request, $serviceId)
+{
+    DB::beginTransaction();
+    try {
+        // Validate payment method
+        $validator = Validator::make($request->all(), [
+            'payment_method' => 'required|in:cash,credit_card,paypal,bank_transfer'
+        ]);
 
-        try {
-            // Validate payment method
-            $validator = Validator::make($request->all(), [
-                'payment_method' => 'required|in:cash,credit_card,paypal,bank_transfer'
-            ]);
-
-            if ($validator->fails()) {
-                return redirect()->back()
-                    ->withErrors($validator)
-                    ->with('error', 'Please select a valid payment method.')
-                    ->withInput();
-            }
-
-            // Get booking details from session
-            $bookingDetails = $request->session()->get('booking_details');
-            if (!$bookingDetails || !isset($bookingDetails['booking_id'], $bookingDetails['payment_id'])) {
-                DB::rollBack();
-                return redirect()->route('booking.select.stylist', ['service' => $serviceId])
-                    ->with('error', 'Session expired. Please start your booking again.');
-            }
-
-            // GET EXISTING BOOKING AND PAYMENT RECORDS
-            $booking = Booking::find($bookingDetails['booking_id']);
-            $payment = Payment::find($bookingDetails['payment_id']);
-
-            if (!$booking || !$payment) {
-                DB::rollBack();
-                Log::error('Booking or payment not found', [
-                    'booking_id' => $bookingDetails['booking_id'],
-                    'payment_id' => $bookingDetails['payment_id']
-                ]);
-                return redirect()->route('booking.select.stylist', ['service' => $serviceId])
-                    ->with('error', 'Booking or payment record not found. Please start again.');
-            }
-
-            // SET PAYMENT STRATEGY
-            $this->paymentContext->setStrategyByMethod($request->payment_method);
-
-            // PREPARE PAYMENT DATA
-            $paymentData = $this->preparePaymentData($request, $bookingDetails);
-
-            // VALIDATE PAYMENT DATA
-            $validation = $this->paymentContext->validatePaymentData($paymentData);
-            if (!$validation['valid']) {
-                DB::rollBack();
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'Payment validation failed: ' . implode(', ', $validation['errors']));
-            }
-
-            // PROCESS PAYMENT USING STRATEGY PATTERN
-            $paymentResult = $this->paymentContext->processPayment($payment->amount, $paymentData);
-
-            if (!$paymentResult['success']) {
-                DB::rollBack();
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', $paymentResult['message'] ?? 'Payment processing failed.');
-            }
-
-            // UPDATE EXISTING PAYMENT RECORD
-            $payment->update([
-                'payment_method' => $request->payment_method,
-                'status' => $paymentResult['payment_status']
-            ]);
-
-            // UPDATE EXISTING BOOKING STATUS
-            $booking->update([
-                'status' => 'confirmed'
-            ]);
-
-            DB::commit();
-
-            // Clear session data
-            $request->session()->forget('booking_details');
-
-            // Store payment result in session for success page
-            $request->session()->flash('payment_result', $paymentResult);
-
-            Log::info('Payment processed and records updated successfully', [
-                'booking_id' => $booking->id,
-                'payment_id' => $payment->id,
-                'payment_method' => $request->payment_method,
-                'payment_status' => $paymentResult['payment_status']
-            ]);
-
-            // Redirect to success page
-            return redirect()->route('booking.success', ['booking' => $booking])
-                ->with('success', $paymentResult['message'] ?? 'Your booking has been confirmed!');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Payment processing error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
+        if ($validator->fails()) {
             return redirect()->back()
-                ->with('error', 'Unable to process payment. Please try again.')
+                ->withErrors($validator)
+                ->with('error', 'Please select a valid payment method.')
                 ->withInput();
         }
+
+        // Get booking details from session
+        $bookingDetails = $request->session()->get('booking_details');
+        if (!$bookingDetails || !isset($bookingDetails['booking_id'])) {
+            DB::rollBack();
+            return redirect()->route('booking.select.stylist', ['service' => $serviceId])
+                ->with('error', 'Session expired. Please start your booking again.');
+        }
+
+        // GET EXISTING BOOKING RECORD
+        $booking = Booking::find($bookingDetails['booking_id']);
+
+        if (!$booking) {
+            DB::rollBack();
+            Log::error('Booking not found', [
+                'booking_id' => $bookingDetails['booking_id']
+            ]);
+            return redirect()->route('booking.select.stylist', ['service' => $serviceId])
+                ->with('error', 'Booking record not found. Please start again.');
+        }
+
+        // FIX: Get the existing payment record instead of creating a new one
+        $payment = Payment::where('booking_id', $booking->id)
+                         ->where('status', 'pending')
+                         ->first();
+
+        if (!$payment) {
+            DB::rollBack();
+            Log::error('Pending payment not found for booking', [
+                'booking_id' => $booking->id
+            ]);
+            return redirect()->route('booking.select.stylist', ['service' => $serviceId])
+                ->with('error', 'Payment record not found. Please start again.');
+        }
+        
+        // Use the PaymentContext to set the strategy
+        $this->paymentContext->setStrategyByMethod($request->payment_method);
+
+        // Prepare payment data using the existing helper method
+        $paymentData = $this->preparePaymentData($request, $bookingDetails);
+        
+        // VALIDATE PAYMENT DATA
+        $validation = $this->paymentContext->validatePaymentData($paymentData);
+        if (!$validation['valid']) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Payment validation failed: ' . implode(', ', $validation['errors']));
+        }
+
+        // PROCESS PAYMENT USING STRATEGY PATTERN
+        $paymentResult = $this->paymentContext->processPayment($booking->total_price, $paymentData);
+
+        if (!$paymentResult['success']) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withInput()
+                ->with('error', $paymentResult['message'] ?? 'Payment processing failed.');
+        }
+        
+        // FIX: UPDATE THE EXISTING PAYMENT RECORD instead of creating a new one
+        $payment->update([
+            'payment_method' => $request->payment_method,
+            'amount' => $booking->total_price,
+            'status' => $paymentResult['payment_status'],
+        ]);
+
+        // FIX: Map payment status to valid booking status values
+        $bookingStatus = $this->mapPaymentStatusToBookingStatus($paymentResult['payment_status']);
+        
+        // UPDATE THE BOOKING RECORD WITH THE PAYMENT ID AND STATUS
+        // Note: payment_id should already be set, but we'll ensure it's correct
+        $booking->payment_id = $payment->id;
+        $booking->status = $bookingStatus;
+        $booking->save();
+        
+        DB::commit();
+
+        // Clear session data
+        $request->session()->forget('booking_details');
+
+        Log::info('Payment processed and records updated successfully', [
+            'booking_id' => $booking->id,
+            'payment_id' => $payment->id,
+            'payment_method' => $request->payment_method,
+            'payment_status' => $paymentResult['payment_status'],
+            'booking_status' => $bookingStatus
+        ]);
+
+        return redirect()->route('booking.success', $booking->id)
+            ->with('success', $paymentResult['message'] ?? 'Your booking has been confirmed!');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Payment processing error: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString()
+        ]);
+        return redirect()->back()
+            ->with('error', 'Unable to process payment. Please try again.')
+            ->withInput();
     }
+}
 
     /**
-     * Prepare payment data based on payment method
+     * Map payment status to valid booking status values
+     * This prevents database constraint violations
      */
+    private function mapPaymentStatusToBookingStatus(string $paymentStatus): string
+    {
+        // Map payment statuses to valid booking statuses based on your database schema
+        // You'll need to adjust these values based on your actual booking status ENUM values
+        $statusMapping = [
+            'completed' => 'booked',    // or 'paid', 'active', etc.
+            'pending' => 'booked',         // or 'unpaid', 'draft', etc.
+            'failed' => 'cancelled',       // or 'failed', 'rejected', etc.
+            'cancelled' => 'cancelled',
+            'refunded' => 'cancelled',
+        ];
+
+        // Return mapped status or default to a safe value
+        return $statusMapping[$paymentStatus] ?? 'booked';
+    }
+
     private function preparePaymentData(Request $request, array $bookingDetails): array
     {
         $basePaymentData = [
             'customer_name' => $bookingDetails['customer_name'],
             'customer_email' => $bookingDetails['customer_email'],
-            'customer_phone' => $bookingDetails['customer_phone'],
-            'booking_reference' => session()->getId() . '_' . time()
+            'customer_phone' => $bookingDetails['customer_phone'] ?? '',
+            'booking_reference' => $bookingDetails['booking_reference'] ?? session()->getId() . '_' . time()
         ];
 
         switch ($request->payment_method) {

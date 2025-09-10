@@ -74,14 +74,14 @@
                     <span class="label">Stylist:</span>
                     <span class="value">{{ $bookingDetails['stylist']->name }}</span>
                 </div>
-                <div class="detail-row">
-                    <span class="label">Date:</span>
-                    <span class="value">{{ date('l, F j, Y', strtotime($bookingDetails['selectedDate'])) }}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="label">Time:</span>
-                    <span class="value">{{ date('g:i A', strtotime($bookingDetails['selectedTime'])) }}</span>
-                </div>
+         <div class="detail-row">
+    <span class="label">Date:</span>
+    <span class="value">{{ $booking->booking_date->format('l, F j, Y') }}</span>
+</div>
+<div class="detail-row">
+    <span class="label">Time:</span>
+    <span class="value">{{ $booking->booking_time->format('g:i A') }}</span>
+</div>
                 <div class="detail-row">
                     <span class="label">Customer:</span>
                     <span class="value">{{ $bookingDetails['customer_name'] }}</span>
@@ -92,7 +92,7 @@
         <!-- Payment Form -->
         <div class="payment-section">
             <h3>Payment Method</h3>
-            <form method="POST" action="{{ route('booking.payment.process', $service->id) }}" class="payment-form" id="paymentForm">
+            <form action="{{ route('booking.payment.process', ['serviceId' => $service->id]) }}" method="POST" id="payment-form">
                 @csrf
 
                 <!-- Payment Method Selection -->
@@ -244,8 +244,8 @@
                         <button type="submit" class="complete-payment-btn">
                             Complete Booking
                         </button>
-                        <a href="{{ route('booking.confirmation', [$service, $bookingDetails['stylist']]) }}?date={{ $bookingDetails['selectedDate'] }}&time={{ $bookingDetails['selectedTime'] }}" 
-                           class="back-payment-btn">
+                       <a href="{{ route('booking.confirmation', [$booking->service, $booking->stylist]) }}" 
+                     class="back-payment-btn">
                             Back to Confirmation
                         </a>
                     </div>

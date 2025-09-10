@@ -54,7 +54,7 @@
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(15px);
             border-bottom: 1px solid var(--border-color);
-            z-index: 1000;
+            z-index: 2000; 
             transition: var(--transition);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -440,6 +440,22 @@
             background-color: black;
         }
 
+        /* ====== ONLY NEW LINES: profile dropdown fix ====== */
+        .profile-menu { position: relative; }
+        .profile-toggle { display: inline-flex; align-items: center; gap: .5rem; background: none; border: 0; cursor: pointer; }
+        .profile-dropdown{
+          position: absolute; right: 0; top: calc(100% + 8px);
+          min-width: 180px; background:#fff; border:1px solid var(--border-color);
+          border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.12);
+          padding: .5rem 0; display:none; z-index:3000;
+        }
+        .profile-menu.open .profile-dropdown{ display:block; }
+        .profile-dropdown a, .profile-dropdown button{
+          display:block; width:100%; text-align:left; padding:.65rem .9rem;
+          background:none; border:0; color:var(--soft-black); text-decoration:none; cursor:pointer;
+        }
+        .profile-dropdown a:hover, .profile-dropdown button:hover{ background:#f3f4f6; }
+        /* ================================================ */
         
     </style>
 </head>
@@ -473,12 +489,15 @@
                             @if (Laravel\Jetstream\Jetstream::hasApiFeatures())
                                 <li><a href="{{ route('api-tokens.index') }}">API Tokens</a></li>
                             @endif
+                            @auth
+                            <li><a href="{{ route('bookings.index') }}">My Bookings</a></li>
                             <li>
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf
                                     <button type="submit" class="logout-link">Logout</button>
                                 </form>
                             </li>
+                            @endauth
                         </ul>
                     </li>
                 @else
@@ -488,7 +507,6 @@
             </ul>
         </div>
     </nav>
-</nav>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -680,6 +698,27 @@
         }
 
         window.addEventListener('scroll', requestTick);
+
+        /* ====== ONLY NEW LINES: profile dropdown behavior ====== */
+        (function () {
+          const menu  = document.querySelector('.profile-menu');
+          const btn   = document.getElementById('profileToggle');
+          if (!menu || !btn) return;
+
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+          });
+
+          document.addEventListener('click', (e) => {
+            if (!menu.contains(e.target)) menu.classList.remove('open');
+          });
+
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') menu.classList.remove('open');
+          });
+        })();
+        /* ======================================================= */
     </script>
     <script src="{{ asset('js/main.js') }}"></script>
 
