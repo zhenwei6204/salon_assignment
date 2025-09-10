@@ -18,7 +18,7 @@ class Service extends Model
         'duration',
         'is_available',
         'stylist_qualifications',
-        'image_url'
+        'image_url',
     ];
 
     protected $casts = [
@@ -48,5 +48,13 @@ class Service extends Model
     public function getCategoryNameAttribute()
     {
         return $this->category ? $this->category->name : 'No Category';
+    }
+
+    // Track how many items consumed per service 
+    public function consumedItems()
+    {
+        return $this->belongsToMany(Item::class, 'service_item_consumptions')
+                    ->withPivot('qty_per_service')
+                    ->withTimestamps();
     }
 }
