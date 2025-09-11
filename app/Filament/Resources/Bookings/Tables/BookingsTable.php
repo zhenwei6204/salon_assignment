@@ -66,14 +66,16 @@ class BookingsTable
                     ->date('F j, Y')
                     ->sortable(),
 
-                // Safely format time even if saved as H:i or H:i:s
+                // Fixed time formatting - handle datetime strings properly
                 TextColumn::make('booking_time')
                     ->label('Booking time')
-                    ->formatStateUsing(fn ($state) => self::formatTime($state)),
+                    ->formatStateUsing(fn ($state) => self::formatTime($state))
+                    ->sortable(),
 
                 TextColumn::make('end_time')
                     ->label('End time')
-                    ->formatStateUsing(fn ($state) => self::formatTime($state)),
+                    ->formatStateUsing(fn ($state) => self::formatTime($state))
+                    ->sortable(),
 
                 TextColumn::make('total_price')
                     ->label('Total')
@@ -135,8 +137,7 @@ class BookingsTable
     }
 
     /**
-     * Try to render a DB time column as "g:i A".
-     * Accepts values like "09:00" or "09:00:00".
+     * Enhanced time formatting to handle various time formats including datetime strings
      */
     private static function formatTime(?string $value): string
     {
@@ -144,16 +145,41 @@ class BookingsTable
             return '—';
         }
 
-        // Try H:i:s first, then H:i
-        foreach (['H:i:s', 'H:i'] as $format) {
+        // Handle datetime strings (e.g., "2025-09-11 09:30:00")
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2})$/', $value, $matches)) {
             try {
-                return Carbon::createFromFormat($format, $value)->format('g:i A');
+                return Carbon::createFromFormat('H:i:s', $matches[1])->format('g:i A');
             } catch (\Throwable $e) {
-                // try next
+                // fallback
             }
         }
 
-        // fallback: show raw value
-        return $value;
+        // Handle datetime strings with just H:i (e.g., "2025-09-11 09:30")
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2})$/', $value, $matches)) {
+            try {
+                return Carbon::createFromFormat('H:i', $matches[1])->format('g:i A');
+            } catch (\Throwable $e) {
+                // fallback
+            }
+        }
+
+        // Handle time-only formats
+        $timeFormats = ['H:i:s', 'H:i'];
+        foreach ($timeFormats as $format) {
+            try {
+                return Carbon::createFromFormat($format, $value)->format('g:i A');
+            } catch (\Throwable $e) {
+                // try next format
+            }
+        }
+
+        // Last resort: try to parse as Carbon and extract time
+        try {
+            $carbon = Carbon::parse($value);
+            return $carbon->format('g:i A');
+        } catch (\Throwable $e) {
+            // Return original value if all parsing fails
+            return $value;
+        }
     }
 }

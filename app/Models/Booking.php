@@ -12,6 +12,7 @@ class Booking extends Model
      protected $fillable = [
         'service_id',
         'stylist_id',
+        'user_id', // Make sure this is in fillable
         'customer_name',
         'customer_email',
         'customer_phone',
@@ -34,20 +35,26 @@ class Booking extends Model
         'total_price' => 'decimal:2'
     ];
 
-      public function service()
+    public function service()
     {
         return $this->belongsTo(Service::class);
     }
 
-   public function stylist()
+    public function stylist()
     {
         return $this->belongsTo(Stylist::class);
     }
-   public function payment()
+
+    // ADD THIS METHOD - This is what's missing!
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function payment()
     {
         return $this->belongsTo(Payment::class, 'payment_id');
     }
-
 
     /**
      * Check if booking has payment

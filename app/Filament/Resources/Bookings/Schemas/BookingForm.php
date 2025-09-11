@@ -27,21 +27,26 @@ class BookingForm
                     $set('recordId', $record?->getKey());
                 }),
 
-            // ── Booking reference (auto, unique, copyable) ───────────────────
+            // ── Booking reference (auto, unique, copyable) ────────────────────
             TextInput::make('booking_reference')
                 ->label('Booking Ref')
                 ->helperText('Auto-generated on create')
-                ->default(fn ($record) => $record?->booking_reference ?? self::makeBookingRef())
+                ->default(function ($record) {
+                    // Only generate new reference if no record exists (create mode)
+                    if (!$record) {
+                        return self::makeBookingRef();
+                    }
+                    return $record->booking_reference;
+                })
                 ->readOnly()
                 ->copyable()
                 ->dehydrated(true)
                 ->rule(function (callable $get) {
                     return Rule::unique('bookings', 'booking_reference')
                         ->ignore($get('recordId'));
-                })
-                ->disabled(),
+                }),
 
-            // ── Service ────────────────────────────────────────────────────────
+            // ── Service ──────────────────────────────────────────────────────────────────
             Select::make('service_id')
                 ->label('Service')
                 ->relationship('service', 'name')
@@ -62,7 +67,7 @@ class BookingForm
                 })
                 ->native(false),
 
-            // ── Stylist (capability check ONLY) ───────────────────────────────
+            // ── Stylist (capability check ONLY) ─────────────────────────────────────
             Select::make('stylist_id')
                 ->label('Stylist')
                 ->relationship('stylist', 'name')
@@ -95,7 +100,7 @@ class BookingForm
                     };
                 }),
 
-            // ── Customer fields (required) ────────────────────────────────────
+            // ── Customer fields (required) ──────────────────────────────────────────────
             TextInput::make('customer_name')
                 ->label('Customer name')
                 ->required()
@@ -128,7 +133,7 @@ class BookingForm
                 ->maxLength(1000)
                 ->columnSpanFull(),
 
-            // ── Date ───────────────────────────────────────────────────────────
+            // ── Date ─────────────────────────────────────────────────────────────────────
             DatePicker::make('booking_date')
                 ->label('Booking date')
                 ->required()
@@ -139,7 +144,7 @@ class BookingForm
                     $set('end_time', null);
                 }),
 
-            // ── Booking time (allowed options + overlap protection) ───────────
+            // ── Booking time (allowed options + overlap protection) ─────────────
             Select::make('booking_time')
                 ->label('Booking time')
                 ->reactive()
@@ -148,35 +153,36 @@ class BookingForm
                 ->native(false)
                 ->placeholder('Select a time slot')
                 ->disabled(fn ($get) => is_null($get('service_id')) || is_null($get('booking_date')) || empty(self::slotOptionsForService($get('service_id'), $get('booking_date'))))
-                // Edit: DB 'H:i:s' -> select 'H:i'
-                ->afterStateHydrated(function ($set, $state) {
-                    if ($state) {
-                        // Handle both H:i:s and H:i formats
-                        $timeFormat = strlen($state) > 5 ? 'H:i:s' : 'H:i';
-                        try {
-                            $formatted = Carbon::createFromFormat($timeFormat, $state)->format('H:i');
-                            $set('booking_time', $formatted);
-                        } catch (\Exception $e) {
-                            // If parsing fails, just use the first 5 characters
-                            $set('booking_time', substr($state, 0, 5));
-                        }
+                // When loading existing record, convert DB time to H:i format for the select
+                ->afterStateHydrated(function ($set, $state, $record) {
+                    if ($state && $record) {
+                        $timeString = self::extractTimeFromValue($state);
+                        $set('booking_time', $timeString);
                     }
                 })
-                // Save: 'H:i' -> DB 'H:i:s'
-                ->dehydrateStateUsing(fn ($state) => $state ? Carbon::createFromFormat('H:i', $state)->format('H:i:s') : null)
-                // Auto-set end_time from duration
+                // When saving, convert H:i format to H:i:s for database
+                ->dehydrateStateUsing(fn ($state) => $state ? self::formatTimeForDatabase($state) : null)
+                // Auto-set end_time when booking_time changes
                 ->afterStateUpdated(function ($get, $set, $state) {
-                    $mins = self::serviceDurationMinutes($get('service_id'));
-                    if ($state && $mins) {
-                        $end = Carbon::createFromFormat('H:i', $state)->addMinutes($mins)->format('H:i');
-                        $set('end_time', $end);
+                    if ($state) {
+                        $mins = self::serviceDurationMinutes($get('service_id'));
+                        if ($mins) {
+                            try {
+                                $endTime = Carbon::createFromFormat('H:i', $state)->addMinutes($mins);
+                                $set('end_time', $endTime->format('H:i'));
+                            } catch (\Exception $e) {
+                                // Handle error gracefully
+                                $set('end_time', null);
+                            }
+                        }
+                    } else {
+                        $set('end_time', null);
                     }
                 })
-                // Only allow values present for this service
+                // Validation rules
                 ->rule(function (callable $get) {
                     return Rule::in(array_keys(self::slotOptionsForService($get('service_id'), $get('booking_date'))));
                 })
-                // Prevent stylist double-booking (ignore current record on edit)
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $stylistId = $get('stylist_id');
@@ -191,7 +197,6 @@ class BookingForm
                         $exists = Booking::query()
                             ->where('stylist_id', $stylistId)
                             ->whereDate('booking_date', $date)
-                            // overlap: existing_start < new_end AND existing_end > new_start
                             ->whereRaw("TIME(booking_time) < ?", [$end->format('H:i:s')])
                             ->whereRaw("TIME(end_time)      > ?", [$start->format('H:i:s')])
                             ->when($recordId, fn ($q) => $q->whereKeyNot($recordId))
@@ -202,7 +207,6 @@ class BookingForm
                         }
                     };
                 })
-                // Additional validation to prevent booking past times on today
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $bookingDate = $get('booking_date');
@@ -210,7 +214,6 @@ class BookingForm
 
                         $selectedDate = Carbon::parse($bookingDate);
                         
-                        // If booking is for today, check if the time has already passed
                         if ($selectedDate->isToday()) {
                             $now = Carbon::now();
                             $selectedDateTime = $selectedDate->copy()->setTimeFromTimeString($value . ':00');
@@ -222,14 +225,48 @@ class BookingForm
                     };
                 }),
 
-            // ── End time (derived: start slot + duration) ─────────────────────
-            Select::make('end_time')
+            // ── End time (auto-calculated, read-only display) ───────────────────────
+            TextInput::make('end_time')
                 ->label('End time')
-                ->options(fn ($get) => self::endSlotOptionsForService($get('service_id'), $get('booking_date')))
-                ->native(false)
-                ->disabled(),
+                ->disabled()
+                ->dehydrated(true)
+                ->placeholder('Will be calculated automatically')
+                // Format for display when loading existing record
+                ->afterStateHydrated(function ($set, $state, $record) {
+                    if ($state && $record) {
+                        $timeString = self::extractTimeFromValue($state);
+                        // Format as readable time for display
+                        try {
+                            $displayTime = Carbon::createFromFormat('H:i', $timeString)->format('g:i A');
+                            $set('end_time', $displayTime);
+                        } catch (\Exception $e) {
+                            $set('end_time', $timeString);
+                        }
+                    }
+                })
+                // Convert display format back to H:i:s for database
+                ->dehydrateStateUsing(function ($state) {
+                    if (!$state) return null;
+                    
+                    try {
+                        // If it's in display format (g:i A), convert to H:i:s
+                        if (preg_match('/^\d{1,2}:\d{2}\s+(AM|PM)$/i', $state)) {
+                            return Carbon::createFromFormat('g:i A', $state)->format('H:i:s');
+                        }
+                        // If it's H:i format, convert to H:i:s
+                        elseif (preg_match('/^\d{2}:\d{2}$/', $state)) {
+                            return Carbon::createFromFormat('H:i', $state)->format('H:i:s');
+                        }
+                        // If it's already H:i:s, return as is
+                        else {
+                            return $state;
+                        }
+                    } catch (\Exception $e) {
+                        return null;
+                    }
+                }),
 
-            // ── Pricing + Status ───────────────────────────────────────────────
+            // ── Pricing + Status ─────────────────────────────────────────────────────────
             TextInput::make('total_price')
                 ->label('Total price')
                 ->numeric()
@@ -249,6 +286,57 @@ class BookingForm
         ]);
     }
 
+    /** Extract time from various formats and return H:i format */
+    protected static function extractTimeFromValue($value): string
+    {
+        if (!$value) return '';
+
+        // Handle full datetime strings like "2025-09-11T02:00:00.000000Z"
+        if (preg_match('/\d{4}-\d{2}-\d{2}[T\s](\d{2}:\d{2})/', $value, $matches)) {
+            return $matches[1];
+        }
+
+        // Handle H:i:s format
+        if (preg_match('/^(\d{2}:\d{2}):\d{2}$/', $value, $matches)) {
+            return $matches[1];
+        }
+
+        // Handle H:i format
+        if (preg_match('/^\d{2}:\d{2}$/', $value)) {
+            return $value;
+        }
+
+        // Try to parse with Carbon as last resort
+        try {
+            return Carbon::parse($value)->format('H:i');
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+
+    /** Format time for database storage (H:i:s) */
+    protected static function formatTimeForDatabase($timeValue): string
+    {
+        if (!$timeValue) return '';
+
+        try {
+            // If it's H:i format, convert to H:i:s
+            if (preg_match('/^\d{2}:\d{2}$/', $timeValue)) {
+                return $timeValue . ':00';
+            }
+            
+            // If it's already H:i:s, return as is
+            if (preg_match('/^\d{2}:\d{2}:\d{2}$/', $timeValue)) {
+                return $timeValue;
+            }
+
+            // Try parsing with Carbon
+            return Carbon::parse($timeValue)->format('H:i:s');
+        } catch (\Exception $e) {
+            return $timeValue;
+        }
+    }
+
     /** Generate a unique booking reference like "BKG-YYYYMMDD-ABCDE". */
     public static function makeBookingRef(): string
     {
@@ -262,24 +350,21 @@ class BookingForm
     /** Allowed START slots for a service as ['H:i' => 'g:i A']. */
     protected static function slotOptionsForService($serviceId, ?string $bookingDate): array
     {
-        // 🛠️ FIX: Add this check to prevent errors with null values
         if (is_null($serviceId) || is_null($bookingDate)) {
             return [];
         }
 
-        $slots = self::defaultStartSlotKeys(); // Start with the default slots
+        $slots = self::defaultStartSlotKeys();
 
         if ($serviceId) {
             $service = Service::find($serviceId);
             if ($service && !empty($service->allowed_slots)) {
-                // Determine the raw slots from the service configuration
                 $raw = is_array($service->allowed_slots)
                     ? $service->allowed_slots
                     : (self::looksLikeJson($service->allowed_slots)
                         ? (json_decode($service->allowed_slots, true) ?: [])
                         : explode(',', (string) $service->allowed_slots));
 
-                // Filter and validate the raw slots
                 $slots = array_values(array_filter(
                     array_map(fn ($v) => trim((string) $v), $raw),
                     fn ($h) => preg_match('/^\d{2}:\d{2}$/', $h)
@@ -287,23 +372,20 @@ class BookingForm
             }
         }
 
-        // Apply time-based filtering if booking date is today
         $out = [];
         if ($bookingDate && Carbon::parse($bookingDate)->isToday()) {
             $now = Carbon::now();
             foreach ($slots as $h_i) {
                 try {
                     $slotDateTime = Carbon::createFromFormat('Y-m-d H:i', $bookingDate . ' ' . $h_i);
-                    // Only add the slot if it's in the future (plus a 30-minute buffer)
                     if ($slotDateTime->gt($now->copy()->addMinutes(30))) {
                         $out[$h_i] = Carbon::createFromFormat('H:i', $h_i)->format('g:i A');
                     }
                 } catch (\Exception $e) {
-                    continue; // Skip invalid time formats
+                    continue;
                 }
             }
         } else {
-            // For future dates, just format all slots
             foreach ($slots as $h_i) {
                 try {
                     $out[$h_i] = Carbon::createFromFormat('H:i', $h_i)->format('g:i A');
@@ -315,32 +397,6 @@ class BookingForm
 
         ksort($out);
         return $out;
-    }
-
-    /** Allowed END slots = each start slot + service duration. */
-    protected static function endSlotOptionsForService($serviceId, ?string $bookingDate): array
-    {
-        // 🛠️ FIX: Add this check to prevent errors with null values
-        if (is_null($serviceId) || is_null($bookingDate)) {
-            return [];
-        }
-
-        $starts = array_keys(self::slotOptionsForService($serviceId, $bookingDate));
-        $duration = self::serviceDurationMinutes($serviceId);
-
-        $ends = [];
-        foreach ($starts as $h_i) {
-            try {
-                $end = Carbon::createFromFormat('H:i', $h_i)->addMinutes($duration)->format('H:i');
-                $ends[$end] = Carbon::createFromFormat('H:i', $end)->format('g:i A');
-            } catch (\Exception $e) {
-                // Skip invalid time formats
-                continue;
-            }
-        }
-
-        ksort($ends);
-        return $ends;
     }
 
     /** Default START slot keys 09:00 → 16:00, every 30 minutes. */
@@ -357,7 +413,7 @@ class BookingForm
         return $slots;
     }
 
-    /** Service duration in minutes; prefers duration_minutes, falls back to duration, else 60. */
+    /** Service duration in minutes */
     protected static function serviceDurationMinutes($serviceId): int
     {
         $s = $serviceId ? Service::find($serviceId) : null;

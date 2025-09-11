@@ -71,7 +71,8 @@ Route::middleware(['auth'])->prefix('booking')->name('booking.')->group(function
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])->get('/my-bookings', [BookingController::class, 'myBookings'])
-    ->name('bookings.index');
+    ->name('bookings.index');  
+
 
 /*
 |--------------------------------------------------------------------------
