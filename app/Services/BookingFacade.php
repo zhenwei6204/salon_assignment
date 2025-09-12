@@ -15,7 +15,7 @@ use App\Mail\BookingConfirmationMail;
 class BookingFacade
 {
     /**
-     * Create a booking for the authenticated user only:
+     * Create a booking:
      * - validates availability
      * - computes end time and total price (snapshot from Service)
      * - writes in a DB transaction
@@ -26,28 +26,13 @@ class BookingFacade
         Stylist $stylist,
         string $bookingDate,      // 'Y-m-d'
         string $bookingTime,      // 'H:i'
-        string $bookingFor,      // Always 'self' now
+        string $bookingFor,      // 'self'|'other'
         ?\App\Models\User $actingUser,
-        ?string $customerPhone,  // Required phone number
-        ?string $otherName = null,      // Not used anymore
-        ?string $otherEmail = null,     // Not used anymore
-        ?string $otherPhone = null      // Not used anymore
+        ?string $customerPhone,  // used when booking for self or fallback
+        ?string $otherName,      // used when booking for other
+        ?string $otherEmail,     // used when booking for other
+        ?string $otherPhone      // used when booking for other
     ): Booking {
-
-        // Validate user is authenticated
-        if (!$actingUser) {
-            throw new \RuntimeException('User must be authenticated to make a booking.');
-        }
-
-        // Validate booking is for self only
-        if ($bookingFor !== 'self') {
-            throw new \RuntimeException('Only self-bookings are allowed.');
-        }
-
-        // Validate phone is provided
-        if (empty($customerPhone)) {
-            throw new \RuntimeException('Phone number is required.');
-        }
 
         // Prepare times
         $duration = (int) ($service->duration ?? 0);
@@ -71,9 +56,18 @@ class BookingFacade
             throw new \RuntimeException('The selected time slot is not available.');
         }
 
-        // Use authenticated user's details (self-booking only)
-        $customerName  = $actingUser->name;
-        $customerEmail = $actingUser->email;
+        // Determine customer details
+        $customerName  = $bookingFor === 'other'
+            ? ($otherName  ?: ($actingUser?->name ?? ''))
+            : ($actingUser?->name ?? '');
+
+        $customerEmail = $bookingFor === 'other'
+            ? ($otherEmail ?: ($actingUser?->email ?? ''))
+            : ($actingUser?->email ?? '');
+
+        $finalPhone    = $bookingFor === 'other'
+            ? ($otherPhone ?: $customerPhone)
+            : $customerPhone;
 
         // Snapshot the price at booking time
         $priceSnapshot = (float) ($service->price ?? 0);
@@ -83,16 +77,16 @@ class BookingFacade
 
         // Persist in a transaction
         $booking = DB::transaction(function () use (
-            $service, $stylist, $customerName, $customerEmail, $customerPhone,
+            $service, $stylist, $customerName, $customerEmail, $finalPhone,
             $bookingDate, $bookingTime, $end, $priceSnapshot, $reference, $actingUser
         ) {
             $b = new Booking();
             $b->service_id        = $service->id;
             $b->stylist_id        = $stylist->id;
-            $b->user_id           = $actingUser->id; // Always set for authenticated user
+            $b->user_id           = $actingUser?->id; // Add user_id foreign key
             $b->customer_name     = $customerName;
             $b->customer_email    = $customerEmail;
-            $b->customer_phone    = $customerPhone;
+            $b->customer_phone    = $finalPhone;
             $b->booking_date      = $bookingDate;
             $b->booking_time      = $bookingTime;
             $b->end_time          = $end->format('H:i');
@@ -104,26 +98,53 @@ class BookingFacade
             return $b;
         });
 
-        // Send confirmation email (best-effort: do not block success if mail fails)
+        // Send confirmation emails (best-effort: do not block success if mail fails)
         try {
-            // Send confirmation to the user who made the booking
-            if (!empty($booking->customer_email)) {
-                Mail::to($booking->customer_email)->send(new BookingConfirmationMail($booking, 'self'));
+            if ($bookingFor === 'self') {
+                // For self booking: send to the customer (who is also the booker)
+                if (!empty($booking->customer_email)) {
+                    Mail::to($booking->customer_email)->send(new BookingConfirmationMail($booking, 'self'));
+                }
+            } else {
+                // For booking someone else: send emails to both parties
+                
+                // 1. Send to the person the booking is made for (guest)
+                if (!empty($booking->customer_email)) {
+                    Mail::to($booking->customer_email)->send(
+                        new BookingConfirmationMail(
+                            $booking, 
+                            'other', 
+                            $actingUser?->name, 
+                            $actingUser?->email
+                        )
+                    );
+                }
+                
+                // 2. Send to the person who made the booking (booker) if different
+                if ($actingUser && $actingUser->email && $actingUser->email !== $booking->customer_email) {
+                    Mail::to($actingUser->email)->send(
+                        new BookingConfirmationMail(
+                            $booking, 
+                            'booker', 
+                            $actingUser->name, 
+                            $actingUser->email
+                        )
+                    );
+                }
             }
         } catch (\Throwable $mailEx) {
-            Log::warning('Self-booking created but email failed', [
+            Log::warning('Booking created but email failed', [
                 'booking_id' => $booking->id,
-                'user_id'    => $actingUser->id,
                 'error'      => $mailEx->getMessage(),
             ]);
         }
 
         // Log success
-        Log::info('Self-booking created successfully', [
+        Log::info('Booking created', [
             'booking_id'   => $booking->id,
             'service_id'   => $service->id,
             'stylist_id'   => $stylist->id,
-            'user_id'      => $booking->user_id,
+            'user_id'      => $booking->user_id, // Log the user_id too
             'date'         => $booking->booking_date,
             'time'         => $booking->booking_time,
             'total_price'  => $booking->total_price,
@@ -145,7 +166,7 @@ class BookingFacade
             ->get(['booking_time', 'end_time']);
 
         foreach ($existing as $b) {
-            // Safely extract only the time from the stored string.
+            // FIX: Safely extract only the time from the stored string.
             $existingBookingTime = date('H:i', strtotime($b->booking_time));
             $existingEndTime = date('H:i', strtotime($b->end_time));
             

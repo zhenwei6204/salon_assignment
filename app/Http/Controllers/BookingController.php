@@ -73,21 +73,20 @@ class BookingController extends Controller
 
    /**
      * Step 4: Create booking (but don't process payment yet)
-     * Then redirect to payment page - SELF BOOKING ONLY
+     * Then redirect to payment page
      */
     public function store(Request $request)
     {
-        // Ensure user is authenticated for self-booking
-        if (!auth()->check()) {
-            return redirect()->route('login')->with('error', 'Please log in to make a booking.');
-        }
-
         $validator = Validator::make($request->all(), [
             'service_id'     => 'required|exists:services,id',
             'stylist_id'     => 'required|exists:stylists,id',
             'booking_date'   => 'required|date',
             'booking_time'   => 'required',
-            'customer_phone' => 'required|string|max:20', // Made required for self-booking
+            'booking_for'    => 'required|in:self,other',
+            'customer_phone' => 'nullable|string',
+            'other_name'     => 'nullable|string',
+            'other_email'    => 'nullable|email',
+            'other_phone'    => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -100,9 +99,8 @@ class BookingController extends Controller
             // Load the service and stylist with their relationships
             $service = Service::findOrFail($request->service_id);
             $stylist = Stylist::findOrFail($request->stylist_id);
-            $user = $request->user();
 
-            // Create the booking using the facade - ALWAYS self booking
+            // Create the booking using the facade
             /** @var BookingFacade $facade */
             $facade = app(BookingFacade::class);
             $booking = $facade->createBooking(
@@ -110,12 +108,12 @@ class BookingController extends Controller
                 $stylist,
                 $request->booking_date,
                 $request->booking_time,
-                'self', // Always self
-                $user,
+                $request->booking_for,
+                $request->user(),
                 $request->customer_phone,
-                null, // No other name
-                null, // No other email
-                null  // No other phone
+                $request->other_name,
+                $request->other_email,
+                $request->other_phone
             );
 
             // Create the payment record for the new booking
@@ -127,7 +125,8 @@ class BookingController extends Controller
                 'payment_ref'   => 'PAY-' . now()->format('Ymd') . '-' . strtoupper(str()->random(8)),
             ]);
 
-            // Store stylist info for payment page
+            // FIXED: Store stylist as an object, not an array
+            // This matches what your Blade template expects
             $stylistArray = [
                 'id' => $stylist->id,
                 'name' => $stylist->name,
@@ -152,19 +151,19 @@ class BookingController extends Controller
                 'end_time' => $booking->end_time,
                 'booking_reference' => $booking->booking_reference,
                 'amount' => $price,
+                // FIXED: Store as array so Blade can access with ['name'] syntax
                 'stylist' => $stylistArray
             ]);
 
             DB::commit();
 
-            Log::info('Self-booking created successfully, redirecting to payment', [
+            Log::info('Booking created successfully, redirecting to payment', [
                 'booking_id' => $booking->id,
                 'payment_id' => $payment->id,
-                'service_id' => $service->id,
-                'user_id' => $user->id
+                'service_id' => $service->id
             ]);
 
-            // Redirect to payment page
+            // Redirect to payment page instead of success page
             return redirect()
                 ->route('booking.payment.makePayment', $request->service_id)
                 ->with('success', 'Booking created! Please complete payment to confirm.');
@@ -175,16 +174,14 @@ class BookingController extends Controller
 
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Unexpected error during self-booking creation', [
+            Log::error('Unexpected error during booking creation', [
                 'error'        => $e->getMessage(),
                 'trace'        => $e->getTraceAsString(),
                 'request_data' => $request->except(['_token']),
-                'user_id'      => auth()->id(),
             ]);
             return back()->withInput()->with('error', 'An unexpected error occurred. Please try again.');
         }
     }
-
     /**
      * Success page (called after successful payment)
      */
@@ -284,52 +281,53 @@ class BookingController extends Controller
         return redirect()->route('bookings.index')
             ->with('success', 'Booking cancelled successfully.');
     }
-
     /**
  * Helper: build available slots for a day/stylist/service duration
  */
-    private function buildAvailableSlots(Service $service, Stylist $stylist, string $date): array
-    {
-        $duration = (int)($service->duration ?? 0);
-        if ($duration <= 0) return [];
+/**
+ * Helper: build available slots for a day/stylist/service duration
+ */
+private function buildAvailableSlots(Service $service, Stylist $stylist, string $date): array
+{
+    $duration = (int)($service->duration ?? 0);
+    if ($duration <= 0) return [];
 
-        $appTimezone = config('app.timezone');
-        $now = \Carbon\Carbon::now($appTimezone);
+    $appTimezone = config('app.timezone');
+    $now = \Carbon\Carbon::now($appTimezone);
 
-        $businessStart = \Carbon\Carbon::parse($date . ' 09:00:00', $appTimezone);
-        $businessEnd   = \Carbon\Carbon::parse($date . ' 18:00:00', $appTimezone);
+    $businessStart = \Carbon\Carbon::parse($date . ' 09:00:00', $appTimezone);
+    $businessEnd   = \Carbon\Carbon::parse($date . ' 18:00:00', $appTimezone);
 
-        // Fetch existing bookings for the selected date
-        // booking_time and end_time are cast as datetime in the Booking model.
-        $bookings = Booking::where('stylist_id', $stylist->id)
-            ->whereDate('booking_date', $date)
-            ->where('status', '!=', 'cancelled')
-            ->get(['booking_time', 'end_time']);
+    // Fetch existing bookings for the selected date
+    // booking_time and end_time are cast as datetime in the Booking model.
+    $bookings = Booking::where('stylist_id', $stylist->id)
+        ->whereDate('booking_date', $date)
+        ->where('status', '!=', 'cancelled')
+        ->get(['booking_time', 'end_time']);
 
-        $busy = $bookings->map(fn($b) => [
-            // The `$b` object already contains Carbon instances for booking_time and end_time.
-            // We only need to use the time component to build the correct interval for the selected date.
-            \Carbon\Carbon::parse($date . ' ' . $b->booking_time->format('H:i:s'), $appTimezone),
-            \Carbon\Carbon::parse($date . ' ' . $b->end_time->format('H:i:s'), $appTimezone),
-        ]);
+    $busy = $bookings->map(fn($b) => [
+        // The `$b` object already contains Carbon instances for booking_time and end_time.
+        // We only need to use the time component to build the correct interval for the selected date.
+        \Carbon\Carbon::parse($date . ' ' . $b->booking_time->format('H:i:s'), $appTimezone),
+        \Carbon\Carbon::parse($date . ' ' . $b->end_time->format('H:i:s'), $appTimezone),
+    ]);
 
-        $slots = [];
-        for ($cursor = $businessStart->copy(); $cursor->lt($businessEnd); $cursor->addMinutes($duration)) {
-            $slotStart = $cursor->copy();
-            $slotEnd   = $cursor->copy()->addMinutes($duration);
-            if ($slotEnd->gt($businessEnd)) break;
+    $slots = [];
+    for ($cursor = $businessStart->copy(); $cursor->lt($businessEnd); $cursor->addMinutes($duration)) {
+        $slotStart = $cursor->copy();
+        $slotEnd   = $cursor->copy()->addMinutes($duration);
+        if ($slotEnd->gt($businessEnd)) break;
 
-            // If the selected date is today, check if the slot time has already passed.
-            if ($businessStart->isToday() && $slotStart->isBefore($now->addMinutes(5))) {
-                continue;
-            }
-
-            $overlaps = $busy->first(fn($int) => $slotStart->lt($int[1]) && $slotEnd->gt($int[0]));
-            if (!$overlaps) {
-                $slots[] = $slotStart->format('H:i');
-            }
+        // If the selected date is today, check if the slot time has already passed.
+        if ($businessStart->isToday() && $slotStart->isBefore($now->addMinutes(5))) {
+            continue;
         }
 
-        return $slots;
+        $overlaps = $busy->first(fn($int) => $slotStart->lt($int[1]) && $slotEnd->gt($int[0]));
+        if (!$overlaps) {
+            $slots[] = $slotStart->format('H:i');
+        }
     }
-}
+
+    return $slots;
+    }}
