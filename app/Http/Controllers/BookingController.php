@@ -196,14 +196,20 @@ class BookingController extends Controller
     }
 
     /**
-     * My Bookings (no migration needed)
-     * - Shows bookings that belong to the user (by email)
-     * - If later you add created_by_user_id, it will include those too automatically
+     * My Bookings - Updated to use user_id foreign key
+     * - Shows bookings that belong to the user (by user_id OR email as fallback)
+     * - Prioritizes user_id relationship for better data integrity
      */
     public function myBookings(Request $request)
     {
-        $query = \App\Models\Booking::with(['service', 'stylist'])
-            ->where('customer_email', $request->user()->email);
+        $user = $request->user();
+        
+        // Query bookings using user_id (preferred) OR email (fallback for old bookings)
+        $query = \App\Models\Booking::with(['service', 'stylist', 'user'])
+            ->where(function($q) use ($user) {
+                $q->where('user_id', $user->id)
+                ->orWhere('customer_email', $user->email);
+            });
 
         // Search (reference, service name, stylist name)
         if ($q = trim($request->get('q', ''))) {
@@ -251,11 +257,14 @@ class BookingController extends Controller
     }
 
     /**
-     * Cancel a booking
-     */
+ * Cancel a booking - Updated to use user_id foreign key
+ */
     public function cancel(Request $request, Booking $booking)
     {
-        if ($booking->customer_email !== $request->user()->email) {
+        $user = $request->user();
+        
+        // Check if user owns this booking (by user_id OR email fallback)
+        if ($booking->user_id !== $user->id && $booking->customer_email !== $user->email) {
             abort(403, 'You are not allowed to cancel this booking.');
         }
 
@@ -269,10 +278,9 @@ class BookingController extends Controller
         $booking->status = 'cancelled';
         $booking->save();
 
-        return redirect()->route('booking.bookings.index')
+        return redirect()->route('bookings.index')
             ->with('success', 'Booking cancelled successfully.');
     }
-
     /**
  * Helper: build available slots for a day/stylist/service duration
  */

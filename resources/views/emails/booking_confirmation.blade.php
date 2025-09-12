@@ -7,9 +7,9 @@
     $endStr   = Carbon::parse($booking->end_time)->format('g:i A');
 
     // Defaults if not provided
-    $mode         = $mode         ?? 'self';         // 'self' | 'other'
-    $bookerName   = $bookerName   ?? null;           // only when 'other'
-    $bookerEmail  = $bookerEmail  ?? null;           // only when 'other'
+    $mode         = $mode         ?? 'self';         // 'self' | 'other' | 'booker'
+    $bookerName   = $bookerName   ?? null;           // only when 'other' or 'booker'
+    $bookerEmail  = $bookerEmail  ?? null;           // only when 'other' or 'booker'
 @endphp
 
 <!doctype html>
@@ -42,7 +42,7 @@
     h1      { margin:0 0 12px; font:700 22px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     p       { margin:0 0 14px; color:#374151; line-height:1.55; }
 
-    /* Summary “panel” */
+    /* Summary panel */
     .sum    { border:1px solid #e5e7eb; background:#fafafa; border-radius:12px; padding:16px; }
     .row    { border-bottom:1px dashed #e5e7eb; }
     .row:last-child { border-bottom:0; }
@@ -61,7 +61,7 @@
     .btn.pri{ background:#f59e0b; color:#111827; margin-right:10px; }
     .btn.sec{ background:#111827; color:#fff; }
 
-    /* Extra panel for "booked for someone else" */
+    /* Extra panel for "booked for someone else" or "booker confirmation" */
     .guest  { margin-top:22px; border:1px solid #e5e7eb; border-radius:12px; }
     .guest td { padding:18px 22px; color:#0f172a; }
 
@@ -92,8 +92,14 @@
       <!-- Body -->
       <tr>
         <td class="bd">
-          <h1>Thank you for your booking, {{ $booking->customer_name }}!</h1>
-          <p>Your booking <strong>#{{ $booking->booking_reference }}</strong> is confirmed.</p>
+          @if ($mode === 'booker')
+            <h1>Booking Confirmation for {{ $booking->customer_name }}</h1>
+            <p>You have successfully booked an appointment for <strong>{{ $booking->customer_name }}</strong>.</p>
+            <p>Booking Reference: <strong>#{{ $booking->booking_reference }}</strong></p>
+          @else
+            <h1>Thank you for your booking, {{ $booking->customer_name }}!</h1>
+            <p>Your booking <strong>#{{ $booking->booking_reference }}</strong> is confirmed.</p>
+          @endif
 
           <!-- Summary Panel -->
           <table role="presentation" class="sum" width="100%" cellpadding="0" cellspacing="0">
@@ -158,7 +164,7 @@
               <tr>
                 <td>
                   <h3 style="margin:0 0 6px; font:700 16px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">
-                    Booked For Someone Else
+                    Booking Details
                   </h3>
 
                   @if($bookerName)
@@ -167,9 +173,9 @@
                     </p>
                   @endif
 
-                  <p style="margin:0 0 4px; color:#334155;"><strong>Guest Name:</strong> {{ $booking->customer_name }}</p>
-                  <p style="margin:0 0 4px; color:#334155;"><strong>Guest Email:</strong> {{ $booking->customer_email ?? '—' }}</p>
-                  <p style="margin:0 0 4px; color:#334155;"><strong>Guest Phone:</strong> {{ $booking->customer_phone ?? '—' }}</p>
+                  <p style="margin:0 0 4px; color:#334155;"><strong>Appointment for:</strong> {{ $booking->customer_name }}</p>
+                  <p style="margin:0 0 4px; color:#334155;"><strong>Contact Email:</strong> {{ $booking->customer_email ?? '–' }}</p>
+                  <p style="margin:0 0 4px; color:#334155;"><strong>Contact Phone:</strong> {{ $booking->customer_phone ?? '–' }}</p>
 
                   @if($booking->special_requests)
                     <p style="margin:8px 0 0; color:#334155;"><strong>Notes:</strong> {{ $booking->special_requests }}</p>
@@ -177,26 +183,57 @@
                 </td>
               </tr>
             </table>
+          @elseif ($mode === 'booker')
+            <table role="presentation" class="guest" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <h3 style="margin:0 0 6px; font:700 16px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">
+                    Appointment Details
+                  </h3>
+
+                  <p style="margin:0 0 4px; color:#334155;"><strong>You booked for:</strong> {{ $booking->customer_name }}</p>
+                  <p style="margin:0 0 4px; color:#334155;"><strong>Their Email:</strong> {{ $booking->customer_email ?? '–' }}</p>
+                  <p style="margin:0 0 4px; color:#334155;"><strong>Their Phone:</strong> {{ $booking->customer_phone ?? '–' }}</p>
+
+                  @if($booking->special_requests)
+                    <p style="margin:8px 0 0; color:#334155;"><strong>Notes:</strong> {{ $booking->special_requests }}</p>
+                  @endif
+
+                  <p style="margin:12px 0 0; color:#6b7280; font-size:13px;">
+                    A confirmation email has also been sent to {{ $booking->customer_name }} at their email address.
+                  </p>
+                </td>
+              </tr>
+            </table>
           @endif
 
           <!-- Buttons -->
           <div class="btns">
-            <a href="{{ url('/') }}" class="btn btn pri">View Booking</a>
-            <a href="{{ url('/') }}" class="btn btn sec">Reschedule</a>
+            @if ($mode === 'booker')
+              <a href="{{ url('/bookings') }}" class="btn btn pri">View All Bookings</a>
+              <a href="{{ url('/') }}" class="btn btn sec">Book Another</a>
+            @else
+              <a href="{{ url('/bookings') }}" class="btn btn pri">View Booking</a>
+              <a href="{{ url('/') }}" class="btn btn sec">Reschedule</a>
+            @endif
           </div>
 
-          <p style="margin-top:18px;">If you have any questions, just reply to this email.</p>
+          @if ($mode === 'booker')
+            <p style="margin-top:18px;">This is your booking confirmation. {{ $booking->customer_name }} will receive their own confirmation email.</p>
+          @else
+            <p style="margin-top:18px;">If you have any questions, just reply to this email.</p>
+          @endif
         </td>
       </tr>
 
       <!-- Footer -->
       <tr>
         <td class="ft">
-          © {{ date('Y') }} Salon Good — 123 Example Street, Kuala Lumpur<br>
-          You’re receiving this because you made a booking at Salon Good.
+          © {{ date('Y') }} Salon Good – 123 Example Street, Kuala Lumpur<br>
+          You're receiving this because you made a booking at Salon Good.
         </td>
       </tr>
     </table>
   </div>
 </body>
-</html>
+</html>s

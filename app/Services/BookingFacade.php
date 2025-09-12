@@ -78,11 +78,12 @@ class BookingFacade
         // Persist in a transaction
         $booking = DB::transaction(function () use (
             $service, $stylist, $customerName, $customerEmail, $finalPhone,
-            $bookingDate, $bookingTime, $end, $priceSnapshot, $reference
+            $bookingDate, $bookingTime, $end, $priceSnapshot, $reference, $actingUser
         ) {
             $b = new Booking();
             $b->service_id        = $service->id;
             $b->stylist_id        = $stylist->id;
+            $b->user_id           = $actingUser?->id; // Add user_id foreign key
             $b->customer_name     = $customerName;
             $b->customer_email    = $customerEmail;
             $b->customer_phone    = $finalPhone;
@@ -97,10 +98,39 @@ class BookingFacade
             return $b;
         });
 
-        // Send confirmation email (best-effort: do not block success if mail fails)
+        // Send confirmation emails (best-effort: do not block success if mail fails)
         try {
-            if (!empty($booking->customer_email)) {
-                Mail::to($booking->customer_email)->send(new BookingConfirmationMail($booking));
+            if ($bookingFor === 'self') {
+                // For self booking: send to the customer (who is also the booker)
+                if (!empty($booking->customer_email)) {
+                    Mail::to($booking->customer_email)->send(new BookingConfirmationMail($booking, 'self'));
+                }
+            } else {
+                // For booking someone else: send emails to both parties
+                
+                // 1. Send to the person the booking is made for (guest)
+                if (!empty($booking->customer_email)) {
+                    Mail::to($booking->customer_email)->send(
+                        new BookingConfirmationMail(
+                            $booking, 
+                            'other', 
+                            $actingUser?->name, 
+                            $actingUser?->email
+                        )
+                    );
+                }
+                
+                // 2. Send to the person who made the booking (booker) if different
+                if ($actingUser && $actingUser->email && $actingUser->email !== $booking->customer_email) {
+                    Mail::to($actingUser->email)->send(
+                        new BookingConfirmationMail(
+                            $booking, 
+                            'booker', 
+                            $actingUser->name, 
+                            $actingUser->email
+                        )
+                    );
+                }
             }
         } catch (\Throwable $mailEx) {
             Log::warning('Booking created but email failed', [
@@ -114,6 +144,7 @@ class BookingFacade
             'booking_id'   => $booking->id,
             'service_id'   => $service->id,
             'stylist_id'   => $stylist->id,
+            'user_id'      => $booking->user_id, // Log the user_id too
             'date'         => $booking->booking_date,
             'time'         => $booking->booking_time,
             'total_price'  => $booking->total_price,
