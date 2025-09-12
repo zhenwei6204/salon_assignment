@@ -367,4 +367,40 @@ class ServiceApiController extends Controller
             ], 500);
         }
     }
+
+      public function getByPrice(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'min' => 'required|numeric|min:0',
+            'max' => 'required|numeric|gte:min',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid price range provided.',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $services = Service::where('is_available', true)
+                ->whereBetween('price', [$request->min, $request->max])
+                ->orderBy('price')
+                ->get();
+            return response()->json([
+                'success' => true,
+                'message' => 'Services retrieved successfully by price range.',
+                'data' => ServiceResource::collection($services)
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error retrieving services by price range: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve services by price range.'
+            ], 500);
+        }
+    }
+       
 }
+

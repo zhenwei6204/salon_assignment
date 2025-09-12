@@ -20,6 +20,7 @@ class PaymentContext
         'credit_card' => CreditCardPaymentStrategy::class,
         'paypal' => PayPalPaymentStrategy::class,
         'bank_transfer' => BankTransferPaymentStrategy::class,
+        
     ];
 
     public function __construct(PaymentStrategyInterface $strategy = null)

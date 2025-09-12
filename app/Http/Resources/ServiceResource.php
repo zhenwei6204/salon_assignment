@@ -74,4 +74,4 @@ class ServiceResource extends JsonResource
 
         return $hours . ' hr' . ($hours > 1 ? 's' : '') . ' ' . $remainingMinutes . ' min';
     }
-}
+}   

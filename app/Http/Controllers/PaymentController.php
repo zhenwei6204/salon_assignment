@@ -90,7 +90,7 @@ public function processPayment(Request $request, $serviceId)
     try {
         // Validate payment method
         $validator = Validator::make($request->all(), [
-            'payment_method' => 'required|in:cash,credit_card,paypal,bank_transfer'
+            'payment_method' => 'required|in:cash,credit_card,paypal,bank_transfer,bank_transfer,'
         ]);
 
         if ($validator->fails()) {
