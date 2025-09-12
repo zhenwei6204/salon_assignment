@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Service extends Model
 {
@@ -51,10 +52,10 @@ class Service extends Model
     }
 
     // Track how many items consumed per service 
-    public function consumedItems()
+    public function consumedItems(): BelongsToMany    
     {
         return $this->belongsToMany(Item::class, 'service_item_consumptions')
-                    ->withPivot('qty_per_service')
-                    ->withTimestamps();
+            ->withPivot('qty_per_service')
+            ->withTimestamps();
     }
 }
