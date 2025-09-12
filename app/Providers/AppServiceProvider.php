@@ -10,6 +10,8 @@ use App\Observers\ItemObserver;
 use App\Models\Booking;
 use App\Observers\BookingObserver;
 
+use App\Models\StockMovement;
+use App\Observers\StockMovementObserver;
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -27,5 +29,6 @@ class AppServiceProvider extends ServiceProvider
     {
         Item::observe(ItemObserver::class);
         Booking::observe(BookingObserver::class);
+        StockMovement::observe(StockMovementObserver::class);
     }
 }

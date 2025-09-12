@@ -36,9 +36,7 @@ class BookingObserver
             $inventory->deductForBooking($booking);
         }
 
-        if ($new === "cancelled") {
-            $inventory->revertForBooking($booking);
-        }
+        
     }
 
     /**

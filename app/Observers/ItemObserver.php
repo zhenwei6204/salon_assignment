@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Item;
 use App\Models\StockMovement;
+use Illuminate\Support\Facades\DB;
 
 class ItemObserver
 {
@@ -12,22 +13,19 @@ class ItemObserver
      */
     public function created(Item $item): void
     {
-        
-        $qty = (int) $item->stock;
-        if ($qty <= 0) {
-            return;
-        }
-
-        StockMovement::withoutEvents(function () use ($item, $qty) {
+        DB::afterCommit(function () use ($item) {
             StockMovement::create([
-                'item_id' => $item->id,
-                'type'    => 'in',
-                'qty'     => $qty,
-                'reason'  => 'New Item',
-                'user_id' => auth()->id(),
+                'item_id'   => $item->id,
+                'item_name' => $item->name,
+                'type'      => StockMovement::TYPE_IN,
+                'qty'       => (int)($item->stock ?? 0),
+                'reason'    => 'New Item',
+                'source'    => 'opening_balance',  
+                'user_id'   => auth()->id(),
             ]);
         });
-    }
+    
+    }   
 
     /**
      * Handle the Item "updated" event.
@@ -42,7 +40,17 @@ class ItemObserver
      */
     public function deleted(Item $item): void
     {
-        //
+        DB::afterCommit(function () use ($item) {
+            StockMovement::create([
+                'item_id' => $item->id,               
+                'item_name' => $item->name,            
+                'type' => StockMovement::TYPE_OUT,
+                'qty'  => (int)($item->getOriginal('stock') ?? 0),
+                'reason' => 'Item deleted',
+                'source' => 'item_deleted',             
+                'user_id' => auth()->id(),
+            ]);
+        });
     }
 
     /**
