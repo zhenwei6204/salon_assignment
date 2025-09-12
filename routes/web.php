@@ -74,8 +74,11 @@ Route::middleware(['auth'])->get('/my-bookings', [BookingController::class, 'myB
     ->name('bookings.index');  
 
 
-/*
-|--------------------------------------------------------------------------
+    
+Route::middleware(['auth'])->get('/payment-history', [PaymentController::class, 'paymentHistory'])
+    ->name('payments.history');
+
+/*--------------------------------------------------------------------------
 | Optional shortcut (protected)
 |--------------------------------------------------------------------------
 */
