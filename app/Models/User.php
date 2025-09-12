@@ -9,8 +9,10 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     use HasApiTokens;
 
@@ -29,6 +31,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'profile_photo_path',
+        'role'
     ];
 
     /**
@@ -65,5 +69,47 @@ class User extends Authenticatable
         ];
     }
 
-     
+    /**
+     * Determine if the user can access the Filament admin panel
+     */
+    public function canAccessPanel(Panel $panel): bool
+{
+    
+    return $this->role === 'admin';
+}
+
+    /**
+     * Helper method to check if user is admin
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Helper method to check if user is stylist
+     */
+    public function isStylist(): bool
+    {
+        return $this->role === 'stylist';
+    }
+
+    /**
+     * Helper method to check if user is regular user/customer
+     */
+    public function isUser(): bool
+    {
+        return $this->role === 'user' || $this->role === 'customer';
+    }
+    
+    public function stylistProfile()
+{
+    return $this->hasOne(\App\Models\Stylist::class, 'user_id');
+}
+
+public function reviews()
+{
+    return $this->hasMany(Review::class);
+}
+
 }

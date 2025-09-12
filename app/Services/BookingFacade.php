@@ -29,9 +29,6 @@ class BookingFacade
         string $bookingFor,      // Always 'self' now
         ?\App\Models\User $actingUser,
         ?string $customerPhone,  // Required phone number
-        ?string $otherName = null,      // Not used anymore
-        ?string $otherEmail = null,     // Not used anymore
-        ?string $otherPhone = null      // Not used anymore
     ): Booking {
 
         // Validate user is authenticated

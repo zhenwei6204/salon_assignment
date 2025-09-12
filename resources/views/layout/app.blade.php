@@ -468,7 +468,7 @@
             <ul class="nav-links" id="navLinks">
                 <li><a href="{{ url('/') }}">Home</a></li>
                 <li><a href="{{ route('services.index') }}">All Services</a></li>
-                <li><a href="{{ route('categories.index') }}">Categories</a></li>
+                <li><a href="{{ route('stylist.index') }}">Stylists</a></li>
 
                 {{-- 👇 Auth links --}}
                 @auth
