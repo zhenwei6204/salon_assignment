@@ -258,4 +258,82 @@ public function processPayment(Request $request, $serviceId)
                 return $basePaymentData;
         }
     }
+
+    public function paymentHistory(Request $request)
+{
+    $query = Payment::with(['booking.service', 'booking.stylist'])
+        ->whereHas('booking', function($q) use ($request) {
+            $q->where('customer_email', $request->user()->email);
+        });
+
+    // Search by payment reference, booking reference, or service name
+    if ($q = trim($request->get('q', ''))) {
+        $query->where(function ($qBuilder) use ($q) {
+            $qBuilder->where('payment_ref', 'like', "%{$q}%")
+                ->orWhere('transaction_id', 'like', "%{$q}%")
+                ->orWhereHas('booking', function ($booking) use ($q) {
+                    $booking->where('booking_reference', 'like', "%{$q}%")
+                        ->orWhereHas('service', function ($service) use ($q) {
+                            $service->where('name', 'like', "%{$q}%");
+                        });
+                });
+        });
+    }
+
+    // Filter by payment method
+    if ($method = $request->get('method')) {
+        if (in_array($method, ['cash', 'credit_card', 'paypal', 'bank_transfer'], true)) {
+            $query->where('payment_method', $method);
+        }
+    }
+
+    // Filter by payment status
+    if ($status = $request->get('status')) {
+        if (in_array($status, ['pending', 'completed', 'failed'], true)) {
+            $query->where('status', $status);
+        }
+    }
+
+    // Date range filter
+    if ($from = $request->get('from')) {
+        $query->whereDate('created_at', '>=', $from);
+    }
+    if ($to = $request->get('to')) {
+        $query->whereDate('created_at', '<=', $to);
+    }
+
+    // Order by newest first
+    $query->orderBy('created_at', 'desc');
+
+    $payments = $query->paginate(10)->withQueryString();
+
+    // Calculate summary statistics
+    $totalPayments = Payment::whereHas('booking', function($q) use ($request) {
+        $q->where('customer_email', $request->user()->email);
+    })->sum('amount');
+
+    $completedPayments = Payment::whereHas('booking', function($q) use ($request) {
+        $q->where('customer_email', $request->user()->email);
+    })->where('status', 'completed')->count();
+
+    $pendingPayments = Payment::whereHas('booking', function($q) use ($request) {
+        $q->where('customer_email', $request->user()->email);
+    })->where('status', 'pending')->count();
+
+    return view('profile.payment_history', [
+        'payments' => $payments,
+        'filters' => [
+            'q' => $request->get('q', ''),
+            'method' => $request->get('method', ''),
+            'status' => $request->get('status', ''),
+            'from' => $request->get('from', ''),
+            'to' => $request->get('to', ''),
+        ],
+        'stats' => [
+            'total_amount' => $totalPayments,
+            'completed_count' => $completedPayments,
+            'pending_count' => $pendingPayments,
+        ]
+    ]);
+}
 }
