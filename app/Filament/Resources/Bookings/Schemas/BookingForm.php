@@ -27,7 +27,7 @@ class BookingForm
                     $set('recordId', $record?->getKey());
                 }),
 
-            // ── Booking reference (auto, unique, copyable) ────────────────────
+            // â”€â”€ Booking reference (auto, unique, copyable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             TextInput::make('booking_reference')
                 ->label('Booking Ref')
                 ->helperText('Auto-generated on create')
@@ -46,7 +46,7 @@ class BookingForm
                         ->ignore($get('recordId'));
                 }),
 
-            // ── Service ──────────────────────────────────────────────────────────────────
+            // â”€â”€ Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Select::make('service_id')
                 ->label('Service')
                 ->relationship('service', 'name')
@@ -67,7 +67,7 @@ class BookingForm
                 })
                 ->native(false),
 
-            // ── Stylist (capability check ONLY) ─────────────────────────────────────
+            // â”€â”€ Stylist (capability check ONLY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Select::make('stylist_id')
                 ->label('Stylist')
                 ->relationship('stylist', 'name')
@@ -100,7 +100,9 @@ class BookingForm
                     };
                 }),
 
-            // ── Customer fields (required) ──────────────────────────────────────────────
+                
+
+            // â”€â”€ Customer fields (required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             TextInput::make('customer_name')
                 ->label('Customer name')
                 ->required()
@@ -127,13 +129,26 @@ class BookingForm
                 ->label('Customer phone')
                 ->maxLength(20),
 
+            TextInput::make('payment_id')
+                ->label('Payment ID')
+                ->disabled()
+                ->dehydrated(false)
+                ->placeholder('No payment record')
+                ->helperText('Reference to payment record')
+                ->afterStateHydrated(function ($set, $record) {
+                    if ($record && $record->payment_id) {
+                        $set('payment_id', $record->payment_id);
+                    }
+            }),
+
             Textarea::make('special_requests')
                 ->label('Special requests')
                 ->rows(3)
                 ->maxLength(1000)
                 ->columnSpanFull(),
 
-            // ── Date ─────────────────────────────────────────────────────────────────────
+
+            // â”€â”€ Date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             DatePicker::make('booking_date')
                 ->label('Booking date')
                 ->required()
@@ -144,7 +159,7 @@ class BookingForm
                     $set('end_time', null);
                 }),
 
-            // ── Booking time (allowed options + overlap protection) ─────────────
+            // â”€â”€ Booking time (allowed options + overlap protection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             Select::make('booking_time')
                 ->label('Booking time')
                 ->reactive()
@@ -225,7 +240,7 @@ class BookingForm
                     };
                 }),
 
-            // ── End time (auto-calculated, read-only display) ───────────────────────
+            // â”€â”€ End time (auto-calculated, read-only display) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             TextInput::make('end_time')
                 ->label('End time')
                 ->disabled()
@@ -266,7 +281,7 @@ class BookingForm
                     }
                 }),
 
-            // ── Pricing + Status ─────────────────────────────────────────────────────────
+            // â”€â”€ Pricing + Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             TextInput::make('total_price')
                 ->label('Total price')
                 ->numeric()
@@ -399,7 +414,7 @@ class BookingForm
         return $out;
     }
 
-    /** Default START slot keys 09:00 → 16:00, every 30 minutes. */
+    /** Default START slot keys 09:00 â†’ 16:00, every 30 minutes. */
     protected static function defaultStartSlotKeys(): array
     {
         $start = Carbon::createFromTime(9, 0);

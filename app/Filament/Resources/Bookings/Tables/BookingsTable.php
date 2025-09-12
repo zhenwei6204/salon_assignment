@@ -27,7 +27,7 @@ class BookingsTable
                     ->alignCenter()
                     ->sortable(false),
 
-                // ✅ Booking reference (visible, searchable, copyable)
+                // âœ… Booking reference (visible, searchable, copyable)
                 TextColumn::make('booking_reference')
                     ->label('Booking Ref')
                     ->searchable()
@@ -36,7 +36,7 @@ class BookingsTable
                     ->copyMessage('Copied!')
                     ->copyMessageDuration(1500)
                     // Nice badge-ish look
-                    ->formatStateUsing(fn ($state) => $state ?: '—')
+                    ->formatStateUsing(fn ($state) => $state ?: 'â€”')
                     ->extraAttributes(['class' => 'font-mono text-xs']),
 
                 TextColumn::make('service.name')
@@ -49,6 +49,8 @@ class BookingsTable
                     ->sortable()
                     ->searchable(),
 
+                
+
                 TextColumn::make('customer_name')
                     ->label('Customer')
                     ->searchable(),
@@ -60,6 +62,13 @@ class BookingsTable
                 TextColumn::make('customer_phone')
                     ->label('Phone')
                     ->toggleable(),
+                
+                TextColumn::make('payment_id')
+                    ->label('Payment ID')
+                    ->sortable()
+                    ->searchable()
+                    ->formatStateUsing(fn ($state) => $state ? '#' . $state : '—')
+                    ->extraAttributes(['class' => 'font-mono text-xs']),
 
                 TextColumn::make('booking_date')
                     ->label('Booking date')
@@ -142,7 +151,7 @@ class BookingsTable
     private static function formatTime(?string $value): string
     {
         if (blank($value)) {
-            return '—';
+            return 'â€”';
         }
 
         // Handle datetime strings (e.g., "2025-09-11 09:30:00")
