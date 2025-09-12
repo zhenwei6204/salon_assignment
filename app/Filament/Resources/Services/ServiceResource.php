@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Services;
 
+use App\Filament\Resources\Services\RelationManagers\ConsumedItemsRelationManager;
 use App\Filament\Resources\Services\Pages\CreateService;
 use App\Filament\Resources\Services\Pages\EditService;
 use App\Filament\Resources\Services\Pages\ListServices;
@@ -20,6 +21,8 @@ class ServiceResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static ?string $recordTitleAttribute = 'generate';
+
     public static function form(Schema $schema): Schema
     {
         return ServiceForm::configure($schema);
@@ -33,7 +36,7 @@ class ServiceResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            ConsumedItemsRelationManager::class,
         ];
     }
 

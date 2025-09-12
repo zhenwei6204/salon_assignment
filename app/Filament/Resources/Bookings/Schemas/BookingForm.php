@@ -78,11 +78,13 @@ class BookingForm
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $serviceId = $get('service_id');
-                        if (!$serviceId || !$value) return;
+                        if (!$serviceId || !$value)
+                            return;
 
                         $service = Service::find($serviceId);
                         $stylist = Stylist::find($value);
-                        if (!$service || !$stylist) return;
+                        if (!$service || !$stylist)
+                            return;
 
                         // A) pivot relationship stylists<->services
                         if (method_exists($stylist, 'services')) {
@@ -109,8 +111,8 @@ class BookingForm
                 ->maxLength(255)
                 ->validationMessages([
                     'required' => 'Customer name is required.',
-                    'min'      => 'Customer name must be at least :min characters.',
-                    'max'      => 'Customer name may not be greater than :max characters.',
+                    'min' => 'Customer name must be at least :min characters.',
+                    'max' => 'Customer name may not be greater than :max characters.',
                 ]),
 
             TextInput::make('customer_email')
@@ -120,8 +122,8 @@ class BookingForm
                 ->maxLength(255)
                 ->validationMessages([
                     'required' => 'Customer email is required.',
-                    'email'    => 'Please enter a valid email address.',
-                    'max'      => 'Email may not be greater than :max characters.',
+                    'email' => 'Please enter a valid email address.',
+                    'max' => 'Email may not be greater than :max characters.',
                 ]),
 
             TextInput::make('customer_phone')
@@ -162,7 +164,7 @@ class BookingForm
             Select::make('booking_time')
                 ->label('Booking time')
                 ->reactive()
-                ->options(fn ($get) => self::slotOptionsForService($get('service_id'), $get('booking_date')))
+                ->options(fn($get) => self::slotOptionsForService($get('service_id'), $get('booking_date')))
                 ->required()
                 ->native(false)
                 ->placeholder('Select a time slot')
@@ -200,20 +202,21 @@ class BookingForm
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $stylistId = $get('stylist_id');
-                        $date      = $get('booking_date');
+                        $date = $get('booking_date');
                         $serviceId = $get('service_id');
-                        if (!$stylistId || !$date || !$value || !$serviceId) return;
+                        if (!$stylistId || !$date || !$value || !$serviceId)
+                            return;
 
-                        $start     = Carbon::createFromFormat('H:i', $value);
-                        $end       = $start->copy()->addMinutes(self::serviceDurationMinutes($serviceId));
-                        $recordId  = $get('recordId') ?? null;
+                        $start = Carbon::createFromFormat('H:i', $value);
+                        $end = $start->copy()->addMinutes(self::serviceDurationMinutes($serviceId));
+                        $recordId = $get('recordId') ?? null;
 
                         $exists = Booking::query()
                             ->where('stylist_id', $stylistId)
                             ->whereDate('booking_date', $date)
                             ->whereRaw("TIME(booking_time) < ?", [$end->format('H:i:s')])
                             ->whereRaw("TIME(end_time)      > ?", [$start->format('H:i:s')])
-                            ->when($recordId, fn ($q) => $q->whereKeyNot($recordId))
+                            ->when($recordId, fn($q) => $q->whereKeyNot($recordId))
                             ->exists();
 
                         if ($exists) {
@@ -224,14 +227,15 @@ class BookingForm
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $bookingDate = $get('booking_date');
-                        if (!$bookingDate || !$value) return;
+                        if (!$bookingDate || !$value)
+                            return;
 
                         $selectedDate = Carbon::parse($bookingDate);
                         
                         if ($selectedDate->isToday()) {
                             $now = Carbon::now();
                             $selectedDateTime = $selectedDate->copy()->setTimeFromTimeString($value . ':00');
-                            
+
                             if ($selectedDateTime->isPast()) {
                                 $fail('Cannot book a time slot that has already passed.');
                             }
@@ -291,7 +295,7 @@ class BookingForm
             Select::make('status')
                 ->label('Status')
                 ->options([
-                    'booked'    => 'Booked',
+                    'booked' => 'Booked',
                     'completed' => 'Completed',
                     'cancelled' => 'Cancelled',
                 ])
@@ -380,8 +384,8 @@ class BookingForm
                         : explode(',', (string) $service->allowed_slots));
 
                 $slots = array_values(array_filter(
-                    array_map(fn ($v) => trim((string) $v), $raw),
-                    fn ($h) => preg_match('/^\d{2}:\d{2}$/', $h)
+                    array_map(fn($v) => trim((string) $v), $raw),
+                    fn($h) => preg_match('/^\d{2}:\d{2}$/', $h)
                 ));
             }
         }
