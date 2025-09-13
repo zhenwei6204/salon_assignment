@@ -87,6 +87,10 @@ class StylistDashboardController extends Controller
 {
     $stylist = Auth::user()->stylistProfile;
 
+    if (!$stylist) {
+        return redirect()->back()->with('error', 'Stylist profile not found.');
+    }
+
     // Define business hours
     $businessStart = '09:00';
     $businessEnd   = '18:00';
@@ -141,31 +145,42 @@ class StylistDashboardController extends Controller
     $conflicts = [];
 
     foreach ($futureBookings as $booking) {
-        $bookingStart = Carbon::parse($booking->booking_time);
-        $bookingEnd   = Carbon::parse($booking->end_time);
+        try {
+            // Handle booking time parsing more safely
+            if ($booking->booking_time instanceof \Carbon\Carbon) {
+                $bookingStart = Carbon::createFromFormat('H:i', $booking->booking_time->format('H:i'));
+                $bookingEnd = Carbon::createFromFormat('H:i', $booking->end_time->format('H:i'));
+            } else {
+                // If it's stored as time string
+                $bookingStart = Carbon::createFromFormat('H:i:s', $booking->booking_time)->format('H:i');
+                $bookingStart = Carbon::createFromFormat('H:i', $bookingStart);
+                $bookingEnd = Carbon::createFromFormat('H:i:s', $booking->end_time)->format('H:i');
+                $bookingEnd = Carbon::createFromFormat('H:i', $bookingEnd);
+            }
 
-        // CONFLICT 1: Booking falls OUTSIDE the new working hours
-        // If booking starts before new start time OR booking ends after new end time
-        if ($bookingStart->lt($newStart) || $bookingEnd->gt($newEnd)) {
-            $conflicts[] = [
-                'type' => 'working_hours',
-                'booking' => $booking,
-                'message' => "Booking on {$booking->booking_date} ({$booking->booking_time} - {$booking->end_time}) with {$booking->customer_name} falls outside new working hours"
-            ];
-        }
-
-        // CONFLICT 2: Booking overlaps with lunch break
-        // Only check if lunch break is set
-        if ($lunchStart && $lunchEnd) {
-            // Booking overlaps with lunch if:
-            // booking starts before lunch ends AND booking ends after lunch starts
-            if ($bookingStart->lt($lunchEnd) && $bookingEnd->gt($lunchStart)) {
+            // CONFLICT 1: Booking falls OUTSIDE the new working hours
+            if ($bookingStart->lt($newStart) || $bookingEnd->gt($newEnd)) {
                 $conflicts[] = [
-                    'type' => 'lunch_break',
+                    'type' => 'working_hours',
                     'booking' => $booking,
-                    'message' => "Booking on {$booking->booking_date} ({$booking->booking_time} - {$booking->end_time}) with {$booking->customer_name} conflicts with lunch break ({$request->lunch_start} - {$request->lunch_end})"
+                    'message' => "Booking on {$booking->booking_date} ({$bookingStart->format('H:i')} - {$bookingEnd->format('H:i')}) with {$booking->customer_name} falls outside new working hours"
                 ];
             }
+
+            // CONFLICT 2: Booking overlaps with lunch break
+            if ($lunchStart && $lunchEnd) {
+                if ($bookingStart->lt($lunchEnd) && $bookingEnd->gt($lunchStart)) {
+                    $conflicts[] = [
+                        'type' => 'lunch_break',
+                        'booking' => $booking,
+                        'message' => "Booking on {$booking->booking_date} ({$bookingStart->format('H:i')} - {$bookingEnd->format('H:i')}) with {$booking->customer_name} conflicts with lunch break ({$request->lunch_start} - {$request->lunch_end})"
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // Skip bookings with invalid time formats
+            \Log::warning('Invalid booking time format', ['booking_id' => $booking->id, 'error' => $e->getMessage()]);
+            continue;
         }
     }
 

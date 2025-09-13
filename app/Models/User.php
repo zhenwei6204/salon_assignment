@@ -99,7 +99,7 @@ class User extends Authenticatable implements FilamentUser
      */
     public function isUser(): bool
     {
-        return $this->role === 'user' || $this->role === 'customer';
+        return $this->role === 'user';
     }
     
     public function stylistProfile()

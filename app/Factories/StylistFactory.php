@@ -43,21 +43,5 @@ class StylistFactory
             'bio' => $data['bio'] ?? null,
             'image_url' => $data['image_url'] ?? null,
         ]);
-
-        // Optional: auto-generate daily slots for the next 30 days
-        $dates = now()->today()->addDays(30)->toArray(); // pseudo-code
-        foreach ($dates as $date) {
-            $start = strtotime('10:00');
-            $end = strtotime('20:00');
-            while ($start < $end) {
-                $stylist->availability()->create([
-                    'date' => $date,
-                    'time_slot' => date('H:i', $start),
-                    'is_available' => 1,
-                ]);
-                $start += 60 * 60; // 1 hour slot
-            }
-        }
-
     }
 }

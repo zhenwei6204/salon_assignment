@@ -188,7 +188,7 @@
                     </div>
                     <div>
                         <label class="block text-gray-700">End Time</label>
-                        <input type="time" name="end_time" value="{{ old('end_time', '20:00') }}" class="border rounded px-2 py-1 w-full">
+                        <input type="time" name="end_time" value="{{ old('end_time', '18:00') }}" class="border rounded px-2 py-1 w-full">
                     </div>
                     <div>
                         <label class="block text-gray-700">Lunch Start</label>

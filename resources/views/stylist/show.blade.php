@@ -59,12 +59,6 @@
                     <span class="text-gray-500">No services listed</span>
                 @endif
             </p>
-
-            <!-- Book Button -->
-            <a href="#contact" 
-               class="bg-black text-white px-6 py-2 rounded-full font-medium hover:bg-gray-800 transition">
-                Book Appointment
-            </a>
         </div>
     </div>
 
