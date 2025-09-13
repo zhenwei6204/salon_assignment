@@ -5,9 +5,17 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BookingController;
-use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\RefundController;
-
+use App\Http\Controllers\PaymentController;
+use App\Models\Stylist;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StylistDashboardController;
+use App\Models\Service;
+use App\Http\Controllers\StylistController;
+use App\Http\Controllers\ReviewController;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
+use App\Models\User;
 /*
 |--------------------------------------------------------------------------
 | Public pages
@@ -106,3 +114,71 @@ Route::middleware([
 ])->group(function () {
     Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Users Site
+|--------------------------------------------------------------------------
+*/
+// Edit Profile
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'index'])->name('profile.page');
+    Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit'); // edit page
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update'); // form submission
+});
+
+// Login to dashboard
+Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', function () {
+        $services = Service::all(); // or filter for featured services
+        return view('home', compact('services')); // pass $services to the view
+    })->name('dashboard');
+});
+
+Route::post('/stylists/{stylist}/reviews', [ReviewController::class, 'store'])
+    ->middleware('auth') // only logged-in users can review
+    ->name('reviews.store');
+
+
+/*
+|--------------------------------------------------------------------------
+| Stylist Site
+|--------------------------------------------------------------------------
+*/
+// Stylists list
+Route::get('/stylists', [StylistController::class, 'index'])->name('stylist.index');
+
+// Individual stylist profile (with route-model binding)
+Route::get('/stylists/{stylist}', [StylistController::class, 'show'])->name('stylists.show');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/stylist/dashboard', [StylistDashboardController::class, 'index'])
+         ->name('stylist.dashboard');
+
+    Route::put('/stylist/profile', [StylistDashboardController::class, 'updateProfile'])
+         ->name('stylist.profile.update');
+
+    Route::put('/stylist/schedule', [StylistDashboardController::class, 'updateSchedule'])
+         ->name('stylist.schedule.update');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin Logout Site
+|--------------------------------------------------------------------------
+*/
+Route::get('/test-logout-binding', function() {
+    $logoutResponse = app(\Filament\Http\Responses\Auth\Contracts\LogoutResponse::class);
+    dd(get_class($logoutResponse));
+});
+
+if(app()->environment('local')){
+    Route::get('/test-login/{id}', function($id){
+        $user = User::find($id);
+        if($user){
+            Auth::login($user);
+            return redirect()->route('stylist.dashboard');
+        }
+        return 'User not found';
+    });
+    }

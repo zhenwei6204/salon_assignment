@@ -27,7 +27,7 @@ class BookingsTable
                     ->alignCenter()
                     ->sortable(false),
 
-                // âœ… Booking reference (visible, searchable, copyable)
+                // ✓ Booking reference (visible, searchable, copyable)
                 TextColumn::make('booking_reference')
                     ->label('Booking Ref')
                     ->searchable()
@@ -36,8 +36,27 @@ class BookingsTable
                     ->copyMessage('Copied!')
                     ->copyMessageDuration(1500)
                     // Nice badge-ish look
-                    ->formatStateUsing(fn ($state) => $state ?: 'â€”')
+                    ->formatStateUsing(fn ($state) => $state ?: '—')
                     ->extraAttributes(['class' => 'font-mono text-xs']),
+
+                // User ID (NEW)
+                TextColumn::make('user_id')
+                    ->label('User ID')
+                    ->sortable()
+                    ->searchable()
+                    ->formatStateUsing(fn ($state) => $state ? '#' . $state : '—')
+                    ->extraAttributes(['class' => 'font-mono text-xs'])
+                    ->toggleable(),
+
+                // User Name (FIXED - no email description)
+                TextColumn::make('user.name')
+                    ->label('Customer')
+                    ->sortable()
+                    ->searchable()
+                    ->formatStateUsing(function ($state, $record) {
+                        // If no user relationship, fall back to legacy customer_name
+                        return $state ?: $record->customer_name ?: '—';
+                    }),
 
                 TextColumn::make('service.name')
                     ->label('Service')
@@ -49,18 +68,29 @@ class BookingsTable
                     ->sortable()
                     ->searchable(),
 
-                
 
                 TextColumn::make('customer_name')
-                    ->label('Customer')
-                    ->searchable(),
+                    ->label('Customer Name (Legacy)')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
+                // Email column (FIXED - clean display)
                 TextColumn::make('customer_email')
                     ->label('Email')
-                    ->toggleable(),
+                    ->searchable()
+                    ->formatStateUsing(function ($state, $record) {
+                        // Prioritize user email over legacy customer_email
+                        $email = $record->user?->email ?: $record->customer_email;
+                        return $email ?: '—';
+                    }),
 
+                // Phone column (FIXED - auto-detect from user but show stored value)
                 TextColumn::make('customer_phone')
                     ->label('Phone')
+                    ->formatStateUsing(function ($state, $record) {
+                        // Show stored phone or fall back to user phone
+                        return $state ?: ($record->user?->phone ?: '—');
+                    })
                     ->toggleable(),
                 
                 TextColumn::make('payment_id')
@@ -119,6 +149,11 @@ class BookingsTable
                 SelectFilter::make('stylist')
                     ->relationship('stylist', 'name'),
 
+                SelectFilter::make('user')
+                    ->relationship('user', 'name')
+                    ->searchable()
+                    ->preload(),
+
                 SelectFilter::make('status')
                     ->options([
                         'booked'    => 'Booked',
@@ -135,13 +170,15 @@ class BookingsTable
                     ->icon('heroicon-o-paper-airplane')
                     ->requiresConfirmation()
                     ->action(function ($record) {
-                        $record->load(['service', 'stylist']);
-                        if ($record->customer_email) {
-                            Mail::to($record->customer_email)
+                        $record->load(['service', 'stylist', 'user']);
+                        $email = $record->user?->email ?? $record->customer_email;
+                        if ($email) {
+                            Mail::to($email)
                                 ->send(new BookingConfirmationMail($record));
                         }
                     })
-                    ->successNotificationTitle('Confirmation email sent'),
+                    ->successNotificationTitle('Confirmation email sent')
+                    ->visible(fn ($record) => $record->user?->email || $record->customer_email),
             ]);
     }
 
@@ -151,7 +188,7 @@ class BookingsTable
     private static function formatTime(?string $value): string
     {
         if (blank($value)) {
-            return 'â€”';
+            return '—';
         }
 
         // Handle datetime strings (e.g., "2025-09-11 09:30:00")

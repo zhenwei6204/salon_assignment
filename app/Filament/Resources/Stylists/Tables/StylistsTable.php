@@ -27,20 +27,11 @@ class StylistsTable
                 TextColumn::make('experience_years')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('rating')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('review_count')
-                    ->numeric()
-                    ->sortable(),
                 IconColumn::make('is_active')
                     ->boolean(),
-                TextColumn::make('phone')
-                    ->searchable(),
                 TextColumn::make('email')
                     ->label('Email address')
                     ->searchable(),
-                ImageColumn::make('image_url'),
                 // Corrected column for assigned services
                 TextColumn::make('services')
                     ->label('Assigned Services')

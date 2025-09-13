@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use App\Mail\BookingConfirmationMail;
+use App\Mail\BookingCancelledMail;
 
 class BookingFacade
 {
@@ -29,9 +30,6 @@ class BookingFacade
         string $bookingFor,      // Always 'self' now
         ?\App\Models\User $actingUser,
         ?string $customerPhone,  // Required phone number
-        ?string $otherName = null,      // Not used anymore
-        ?string $otherEmail = null,     // Not used anymore
-        ?string $otherPhone = null      // Not used anymore
     ): Booking {
 
         // Validate user is authenticated
@@ -131,6 +129,78 @@ class BookingFacade
 
         return $booking;
     }
+
+    public function cancelBooking(\App\Models\Booking $booking, \App\Models\User $actingUser): \App\Models\Booking
+    {
+        // Ownership/auth checks
+        if ($booking->user_id !== $actingUser->id && $booking->customer_email !== $actingUser->email) {
+            throw new \RuntimeException('You are not allowed to cancel this booking.');
+        }
+        if ($booking->status === 'completed') {
+            throw new \RuntimeException('Completed bookings cannot be cancelled.');
+        }
+        if ($booking->status === 'cancelled') {
+            throw new \RuntimeException('This booking is already cancelled.');
+        }
+
+        $tz = config('app.timezone');
+
+        // Get a pure Y-m-d and pure H:i:s from stored values (works whether columns are strings or Carbon)
+        $dateYmd   = $booking->booking_date instanceof Carbon
+            ? $booking->booking_date->format('Y-m-d')
+            : date('Y-m-d', strtotime((string)$booking->booking_date));
+
+        $startTime = $this->onlyTime($booking->booking_time); // e.g. "11:00:00"
+        $endTime   = $this->onlyTime($booking->end_time);     // e.g. "12:00:00"
+
+        // Build correct Carbon instances (one date + one time)
+        $start = Carbon::parse($dateYmd.' '.$startTime, $tz);
+        $end   = Carbon::parse($dateYmd.' '.$endTime,   $tz);
+
+        // Business rule: cannot cancel within 2 hours of appointment
+        if ($start->lte(now($tz)->addHours(2))) {
+            throw new \RuntimeException('Too close to appointment, cannot cancel.');
+        }
+
+        // Update status
+        $booking->status = 'cancelled';
+        $booking->save();
+
+        // Send cancellation email (best-effort)
+        try {
+            $recipient = $booking->customer_email ?: optional($booking->user)->email;
+            Log::info('About to send BookingCancelledMail', ['booking_id' => $booking->id, 'to' => $recipient]);
+
+            if ($recipient) {
+                Mail::to($recipient)->send(new BookingCancelledMail($booking));
+                Log::info('BookingCancelledMail sent', ['booking_id' => $booking->id]);
+            } else {
+                Log::warning('No recipient email found for cancelled booking', ['booking_id' => $booking->id]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed sending BookingCancelledMail', [
+                'booking_id' => $booking->id,
+                'error'      => $e->getMessage(),
+            ]);
+        }
+
+        return $booking;
+    }
+
+    /**
+     * Return time-of-day as "H:i:s" regardless of whether the value is string or Carbon.
+     */
+    private function onlyTime($value): string
+    {
+        if ($value instanceof Carbon) {
+            return $value->format('H:i:s');
+        }
+        // If it's already "H:i" or "H:i:s", keep it; else parse safely
+        $ts = strtotime((string)$value);
+        return $ts ? date('H:i:s', $ts) : '00:00:00';
+    }
+
+
 
     /**
      * Check the stylist's availability for the given period.

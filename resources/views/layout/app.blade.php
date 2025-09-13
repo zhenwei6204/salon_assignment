@@ -7,9 +7,10 @@
      
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
- 
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="{{ asset('css/styles.css') }}" rel="stylesheet">
     
+    @stack('styles')
   
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -468,7 +469,7 @@
             <ul class="nav-links" id="navLinks">
                 <li><a href="{{ url('/') }}">Home</a></li>
                 <li><a href="{{ route('services.index') }}">All Services</a></li>
-                <li><a href="{{ route('categories.index') }}">Categories</a></li>
+                <li><a href="{{ route('stylist.index') }}">Stylists</a></li>
 
                 {{-- 👇 Auth links --}}
                 @auth

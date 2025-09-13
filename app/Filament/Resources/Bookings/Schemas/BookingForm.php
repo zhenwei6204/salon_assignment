@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Bookings\Schemas;
 use App\Models\Service;
 use App\Models\Stylist;
 use App\Models\Booking;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Filament\Schemas\Schema;
@@ -27,7 +28,7 @@ class BookingForm
                     $set('recordId', $record?->getKey());
                 }),
 
-            // â”€â”€ Booking reference (auto, unique, copyable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── Booking reference (auto, unique, copyable) ──────────────────────────────────────
             TextInput::make('booking_reference')
                 ->label('Booking Ref')
                 ->helperText('Auto-generated on create')
@@ -46,7 +47,7 @@ class BookingForm
                         ->ignore($get('recordId'));
                 }),
 
-            // â”€â”€ Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── Service ─────────────────────────────────────────────────────────────────────────
             Select::make('service_id')
                 ->label('Service')
                 ->relationship('service', 'name')
@@ -67,7 +68,7 @@ class BookingForm
                 })
                 ->native(false),
 
-            // â”€â”€ Stylist (capability check ONLY) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── Stylist (capability check ONLY) ────────────────────────────────────────────────
             Select::make('stylist_id')
                 ->label('Stylist')
                 ->relationship('stylist', 'name')
@@ -102,34 +103,72 @@ class BookingForm
                     };
                 }),
 
-                
-
-            // â”€â”€ Customer fields (required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            TextInput::make('customer_name')
-                ->label('Customer name')
+            // ──────── User Selection (Customer Name Only) ────────────────────────────────────────────
+            Select::make('user_id')
+                ->label('Customer')
+                ->relationship('user', 'name')
+                ->searchable(['name', 'email'])
+                ->preload()
                 ->required()
-                ->minLength(2)
-                ->maxLength(255)
-                ->validationMessages([
-                    'required' => 'Customer name is required.',
-                    'min' => 'Customer name must be at least :min characters.',
-                    'max' => 'Customer name may not be greater than :max characters.',
-                ]),
+                ->native(false)
+                ->getOptionLabelFromRecordUsing(fn (User $record): string => $record->name)
+                ->reactive()
+                ->afterStateUpdated(function ($get, $set, $state) {
+                    // Auto-fill customer fields when user is selected
+                    if ($state) {
+                        $user = User::find($state);
+                        if ($user) {
+                            $set('customer_name', $user->name);
+                            $set('customer_email', $user->email);
+                            $set('customer_phone', $user->phone ?? '');
+                        }
+                    } else {
+                        // Clear customer fields if user is deselected
+                        $set('customer_name', '');
+                        $set('customer_email', '');
+                        $set('customer_phone', '');
+                    }
+                })
+                ->createOptionForm([
+                    TextInput::make('name')
+                        ->required()
+                        ->maxLength(255),
+                    TextInput::make('email')
+                        ->email()
+                        ->required()
+                        ->unique('users', 'email')
+                        ->maxLength(255),
+                    TextInput::make('phone')
+                        ->maxLength(20),
+                ])
+                ->createOptionAction(function ($action) {
+                    return $action
+                        ->modalHeading('Create New Customer')
+                        ->modalSubmitActionLabel('Create Customer')
+                        ->modalWidth('lg');
+                }),
+
+            // ──────── Auto-filled fields ─────────────────────────────────────────────────────────────
+            Hidden::make('customer_name')
+                ->dehydrated(true),
 
             TextInput::make('customer_email')
-                ->label('Customer email')
-                ->email()
-                ->required()
-                ->maxLength(255)
-                ->validationMessages([
-                    'required' => 'Customer email is required.',
-                    'email' => 'Please enter a valid email address.',
-                    'max' => 'Email may not be greater than :max characters.',
-                ]),
+                ->label('Email')
+                ->disabled()
+                ->dehydrated(true),
 
+            // FIXED: Phone field is now editable but auto-filled
             TextInput::make('customer_phone')
-                ->label('Customer phone')
-                ->maxLength(20),
+                ->label('Phone')
+                ->dehydrated(true)
+                ->maxLength(20)
+                ->reactive()
+                ->afterStateHydrated(function ($set, $state, $record) {
+                    // When editing existing record, show the stored phone
+                    if ($record && $record->customer_phone) {
+                        $set('customer_phone', $record->customer_phone);
+                    }
+                }),
 
             TextInput::make('payment_id')
                 ->label('Payment ID')
@@ -149,8 +188,7 @@ class BookingForm
                 ->maxLength(1000)
                 ->columnSpanFull(),
 
-
-            // â”€â”€ Date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── Date ────────────────────────────────────────────────────────────────────────────
             DatePicker::make('booking_date')
                 ->label('Booking date')
                 ->required()
@@ -161,7 +199,7 @@ class BookingForm
                     $set('end_time', null);
                 }),
 
-            // â”€â”€ Booking time (allowed options + overlap protection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── Booking time (allowed options + overlap protection) ────────────────────────────
             Select::make('booking_time')
                 ->label('Booking time')
                 ->reactive()
@@ -244,7 +282,7 @@ class BookingForm
                     };
                 }),
 
-            // â”€â”€ End time (auto-calculated, read-only display) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── End time (auto-calculated, read-only display) ──────────────────────────────────
             TextInput::make('end_time')
                 ->label('End time')
                 ->disabled()
@@ -285,7 +323,7 @@ class BookingForm
                     }
                 }),
 
-            // â”€â”€ Pricing + Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ──────── Pricing + Status ───────────────────────────────────────────────────────────────
             TextInput::make('total_price')
                 ->label('Total price')
                 ->numeric()
@@ -418,7 +456,7 @@ class BookingForm
         return $out;
     }
 
-    /** Default START slot keys 09:00 â†’ 16:00, every 30 minutes. */
+    /** Default START slot keys 09:00 – 16:00, every 30 minutes. */
     protected static function defaultStartSlotKeys(): array
     {
         $start = Carbon::createFromTime(9, 0);

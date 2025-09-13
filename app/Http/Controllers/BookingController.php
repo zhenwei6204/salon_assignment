@@ -264,72 +264,117 @@ class BookingController extends Controller
  */
     public function cancel(Request $request, Booking $booking)
     {
-        $user = $request->user();
-        
-        // Check if user owns this booking (by user_id OR email fallback)
-        if ($booking->user_id !== $user->id && $booking->customer_email !== $user->email) {
-            abort(403, 'You are not allowed to cancel this booking.');
-        }
+        /** @var \App\Services\BookingFacade $facade */
+        $facade = app(\App\Services\BookingFacade::class);
 
-        if ($booking->status === 'completed') {
-            return back()->with('error', 'Completed bookings cannot be cancelled.');
+        try {
+            $facade->cancelBooking($booking, $request->user());
+            return redirect()->route('bookings.index')
+                ->with('success', 'Booking cancelled successfully. A confirmation email has been sent.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
         }
-        if ($booking->status === 'cancelled') {
-            return back()->with('info', 'This booking is already cancelled.');
-        }
-
-        $booking->status = 'cancelled';
-        $booking->save();
-
-        return redirect()->route('bookings.index')
-            ->with('success', 'Booking cancelled successfully.');
     }
+
 
     /**
  * Helper: build available slots for a day/stylist/service duration
  */
-    private function buildAvailableSlots(Service $service, Stylist $stylist, string $date): array
-    {
-        $duration = (int)($service->duration ?? 0);
-        if ($duration <= 0) return [];
+private function buildAvailableSlots(Service $service, Stylist $stylist, string $date): array
+{
+    $duration = (int)($service->duration ?? 0);
+    if ($duration <= 0) return [];
 
-        $appTimezone = config('app.timezone');
-        $now = \Carbon\Carbon::now($appTimezone);
+    $appTimezone = config('app.timezone');
+    $now = \Carbon\Carbon::now($appTimezone);
 
-        $businessStart = \Carbon\Carbon::parse($date . ' 09:00:00', $appTimezone);
-        $businessEnd   = \Carbon\Carbon::parse($date . ' 18:00:00', $appTimezone);
+    // Use stylist's working hours, not business hours
+    // If stylist hasn't set their hours, default to business hours
+    $stylistStart = $stylist->start_time ?? '09:00:00';
+    $stylistEnd = $stylist->end_time ?? '18:00:00';
 
-        // Fetch existing bookings for the selected date
-        // booking_time and end_time are cast as datetime in the Booking model.
-        $bookings = Booking::where('stylist_id', $stylist->id)
-            ->whereDate('booking_date', $date)
-            ->where('status', '!=', 'cancelled')
-            ->get(['booking_time', 'end_time']);
+    // Extract just the time part if it's a datetime string
+    $stylistStart = $this->extractTime($stylistStart);
+    $stylistEnd = $this->extractTime($stylistEnd);
 
-        $busy = $bookings->map(fn($b) => [
-            // The `$b` object already contains Carbon instances for booking_time and end_time.
-            // We only need to use the time component to build the correct interval for the selected date.
-            \Carbon\Carbon::parse($date . ' ' . $b->booking_time->format('H:i:s'), $appTimezone),
-            \Carbon\Carbon::parse($date . ' ' . $b->end_time->format('H:i:s'), $appTimezone),
-        ]);
+    $businessStart = \Carbon\Carbon::parse($date . ' '. $stylistStart, $appTimezone);
+    $businessEnd   = \Carbon\Carbon::parse($date . ' '. $stylistEnd, $appTimezone);
 
-        $slots = [];
-        for ($cursor = $businessStart->copy(); $cursor->lt($businessEnd); $cursor->addMinutes($duration)) {
-            $slotStart = $cursor->copy();
-            $slotEnd   = $cursor->copy()->addMinutes($duration);
-            if ($slotEnd->gt($businessEnd)) break;
+    // Fetch existing bookings for the selected date
+    $bookings = Booking::where('stylist_id', $stylist->id)
+        ->whereDate('booking_date', $date)
+        ->where('status', '!=', 'cancelled')
+        ->get(['booking_time', 'end_time']);
 
-            // If the selected date is today, check if the slot time has already passed.
-            if ($businessStart->isToday() && $slotStart->isBefore($now->addMinutes(5))) {
-                continue;
-            }
+    $busy = $bookings->map(function($b) use ($date, $appTimezone) {
+        $startTime = $this->extractTime($b->booking_time);
+        $endTime = $this->extractTime($b->end_time);
+        
+        return [
+            \Carbon\Carbon::parse($date . ' ' . $startTime, $appTimezone),
+            \Carbon\Carbon::parse($date . ' ' . $endTime, $appTimezone),
+        ];
+    });
 
-            $overlaps = $busy->first(fn($int) => $slotStart->lt($int[1]) && $slotEnd->gt($int[0]));
-            if (!$overlaps) {
-                $slots[] = $slotStart->format('H:i');
-            }
+    // Add lunch break to busy intervals if lunch times are set
+    if ($stylist->lunch_start && $stylist->lunch_end) {
+        $lunchStartTime = $this->extractTime($stylist->lunch_start);
+        $lunchEndTime = $this->extractTime($stylist->lunch_end);
+        
+        $lunchStart = \Carbon\Carbon::parse($date . ' ' . $lunchStartTime, $appTimezone);
+        $lunchEnd = \Carbon\Carbon::parse($date . ' ' . $lunchEndTime, $appTimezone);
+    
+        $busy->push([$lunchStart, $lunchEnd]);
+    }
+
+    $slots = [];
+    for ($cursor = $businessStart->copy(); $cursor->lt($businessEnd); $cursor->addMinutes($duration)) {
+        $slotStart = $cursor->copy();
+        $slotEnd   = $cursor->copy()->addMinutes($duration);
+        if ($slotEnd->gt($businessEnd)) break;
+
+        // If the selected date is today, check if the slot time has already passed.
+        if ($businessStart->isToday() && $slotStart->isBefore($now->addMinutes(5))) {
+            continue;
         }
 
-        return $slots;
+        $overlaps = $busy->first(fn($int) => $slotStart->lt($int[1]) && $slotEnd->gt($int[0]));
+        if (!$overlaps) {
+            $slots[] = $slotStart->format('H:i');
+        }
     }
+
+    return $slots;
+}
+
+// Helper method to extract time from datetime string
+private function extractTime($datetime)
+{
+    if ($datetime instanceof \Carbon\Carbon) {
+        return $datetime->format('H:i:s');
+    }
+    
+    if (is_string($datetime)) {
+        // If it's already just a time string like "12:00:00"
+        if (preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $datetime)) {
+            return $datetime;
+        }
+        
+        // If it's a datetime string, extract the time part
+        try {
+            $carbon = \Carbon\Carbon::parse($datetime);
+            return $carbon->format('H:i:s');
+        } catch (\Exception $e) {
+            // Fallback: try to extract time manually
+            if (preg_match('/(\d{1,2}:\d{2}:\d{2})/', $datetime, $matches)) {
+                return $matches[1];
+            }
+            if (preg_match('/(\d{1,2}:\d{2})/', $datetime, $matches)) {
+                return $matches[1] . ':00';
+            }
+        }
+    }
+    
+    return '00:00:00'; // Default fallback
+}
 }
