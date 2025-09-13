@@ -28,7 +28,7 @@ class BookingForm
                     $set('recordId', $record?->getKey());
                 }),
 
-            // ──────── Booking reference (auto, unique, copyable) ──────────────────────────────────────
+            // ──────── Booking reference (auto, unique, copyable) ────────────────────────────────────────────
             TextInput::make('booking_reference')
                 ->label('Booking Ref')
                 ->helperText('Auto-generated on create')
@@ -47,7 +47,7 @@ class BookingForm
                         ->ignore($get('recordId'));
                 }),
 
-            // ──────── Service ─────────────────────────────────────────────────────────────────────────
+            // ──────── Service ─────────────────────────────────────────────────────────────────────────────
             Select::make('service_id')
                 ->label('Service')
                 ->relationship('service', 'name')
@@ -68,13 +68,19 @@ class BookingForm
                 })
                 ->native(false),
 
-            // ──────── Stylist (capability check ONLY) ────────────────────────────────────────────────
+            // ──────── Stylist (capability check ONLY) ──────────────────────────────────────────────────
             Select::make('stylist_id')
                 ->label('Stylist')
                 ->relationship('stylist', 'name')
                 ->searchable()
                 ->preload()
                 ->required()
+                ->reactive()
+                ->afterStateUpdated(function ($set) {
+                    // Reset time fields when stylist changes
+                    $set('booking_time', null);
+                    $set('end_time', null);
+                })
                 ->native(false)
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
@@ -103,7 +109,7 @@ class BookingForm
                     };
                 }),
 
-            // ──────── User Selection (Customer Name Only) ────────────────────────────────────────────
+            // ──────── User Selection (Customer Name Only) ──────────────────────────────────────────────
             Select::make('user_id')
                 ->label('Customer')
                 ->relationship('user', 'name')
@@ -148,7 +154,7 @@ class BookingForm
                         ->modalWidth('lg');
                 }),
 
-            // ──────── Auto-filled fields ─────────────────────────────────────────────────────────────
+            // ──────── Auto-filled fields ──────────────────────────────────────────────────────────────
             Hidden::make('customer_name')
                 ->dehydrated(true),
 
@@ -188,7 +194,7 @@ class BookingForm
                 ->maxLength(1000)
                 ->columnSpanFull(),
 
-            // ──────── Date ────────────────────────────────────────────────────────────────────────────
+            // ──────── Date ─────────────────────────────────────────────────────────────────────────────
             DatePicker::make('booking_date')
                 ->label('Booking date')
                 ->required()
@@ -199,15 +205,20 @@ class BookingForm
                     $set('end_time', null);
                 }),
 
-            // ──────── Booking time (allowed options + overlap protection) ────────────────────────────
+            // ──────── Booking time (allowed options + overlap protection) ──────────────────────────
             Select::make('booking_time')
                 ->label('Booking time')
                 ->reactive()
-                ->options(fn($get) => self::slotOptionsForService($get('service_id'), $get('booking_date')))
+                ->options(fn($get) => self::slotOptionsForService(
+                    $get('service_id'), 
+                    $get('booking_date'), 
+                    $get('stylist_id'),
+                    $get('recordId')
+                ))
                 ->required()
                 ->native(false)
                 ->placeholder('Select a time slot')
-                ->disabled(fn ($get) => is_null($get('service_id')) || is_null($get('booking_date')) || empty(self::slotOptionsForService($get('service_id'), $get('booking_date'))))
+                ->disabled(fn ($get) => is_null($get('service_id')) || is_null($get('booking_date')) || is_null($get('stylist_id')) || empty(self::slotOptionsForService($get('service_id'), $get('booking_date'), $get('stylist_id'), $get('recordId'))))
                 // When loading existing record, convert DB time to H:i format for the select
                 ->afterStateHydrated(function ($set, $state, $record) {
                     if ($state && $record) {
@@ -236,30 +247,81 @@ class BookingForm
                 })
                 // Validation rules
                 ->rule(function (callable $get) {
-                    return Rule::in(array_keys(self::slotOptionsForService($get('service_id'), $get('booking_date'))));
+                    return Rule::in(array_keys(self::slotOptionsForService($get('service_id'), $get('booking_date'), $get('stylist_id'))));
                 })
+                // Enhanced validation for working hours and lunch breaks
                 ->rule(function (callable $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $stylistId = $get('stylist_id');
                         $date = $get('booking_date');
                         $serviceId = $get('service_id');
-                        if (!$stylistId || !$date || !$value || !$serviceId)
+                        
+                        if (!$stylistId || !$date || !$value || !$serviceId) {
                             return;
+                        }
 
-                        $start = Carbon::createFromFormat('H:i', $value);
-                        $end = $start->copy()->addMinutes(self::serviceDurationMinutes($serviceId));
-                        $recordId = $get('recordId') ?? null;
+                        $stylist = Stylist::find($stylistId);
+                        if (!$stylist) {
+                            return;
+                        }
 
-                        $exists = Booking::query()
-                            ->where('stylist_id', $stylistId)
-                            ->whereDate('booking_date', $date)
-                            ->whereRaw("TIME(booking_time) < ?", [$end->format('H:i:s')])
-                            ->whereRaw("TIME(end_time)      > ?", [$start->format('H:i:s')])
-                            ->when($recordId, fn($q) => $q->whereKeyNot($recordId))
-                            ->exists();
+                        try {
+                            $bookingStart = Carbon::createFromFormat('H:i', $value);
+                            $serviceDuration = self::serviceDurationMinutes($serviceId);
+                            $bookingEnd = $bookingStart->copy()->addMinutes($serviceDuration);
 
-                        if ($exists) {
-                            $fail('This slot overlaps with another booking for this stylist.');
+                            // Check 1: Working hours validation
+                            $workingStart = null;
+                            $workingEnd = null;
+
+                            if ($stylist->start_time) {
+                                $workingStart = Carbon::createFromFormat('H:i:s', self::extractTimeFromValue($stylist->start_time));
+                            }
+                            if ($stylist->end_time) {
+                                $workingEnd = Carbon::createFromFormat('H:i:s', self::extractTimeFromValue($stylist->end_time));
+                            }
+
+                            if ($workingStart && $bookingStart->lt($workingStart)) {
+                                $fail("This booking time is before the stylist's working hours start ({$workingStart->format('H:i')}).");
+                                return;
+                            }
+
+                            if ($workingEnd && $bookingEnd->gt($workingEnd)) {
+                                $fail("This booking would extend beyond the stylist's working hours end ({$workingEnd->format('H:i')}).");
+                                return;
+                            }
+
+                            // Check 2: Lunch break validation
+                            if ($stylist->lunch_start && $stylist->lunch_end) {
+                                $lunchStart = Carbon::createFromFormat('H:i:s', self::extractTimeFromValue($stylist->lunch_start));
+                                $lunchEnd = Carbon::createFromFormat('H:i:s', self::extractTimeFromValue($stylist->lunch_end));
+
+                                // Check if booking overlaps with lunch break
+                                if ($bookingStart->lt($lunchEnd) && $bookingEnd->gt($lunchStart)) {
+                                    $fail("This booking conflicts with the stylist's lunch break ({$lunchStart->format('H:i')} - {$lunchEnd->format('H:i')}).");
+                                    return;
+                                }
+                            }
+
+                            // Check 3: Existing booking conflicts
+                            $recordId = $get('recordId') ?? null;
+
+                            $conflictExists = Booking::query()
+                                ->where('stylist_id', $stylistId)
+                                ->whereDate('booking_date', $date)
+                                ->where('status', '!=', 'cancelled')
+                                ->whereRaw("TIME(booking_time) < ?", [$bookingEnd->format('H:i:s')])
+                                ->whereRaw("TIME(end_time) > ?", [$bookingStart->format('H:i:s')])
+                                ->when($recordId, fn($q) => $q->whereKeyNot($recordId))
+                                ->exists();
+
+                            if ($conflictExists) {
+                                $fail('This slot overlaps with another booking for this stylist.');
+                                return;
+                            }
+
+                        } catch (\Exception $e) {
+                            $fail('Invalid time format provided.');
                         }
                     };
                 })
@@ -323,7 +385,7 @@ class BookingForm
                     }
                 }),
 
-            // ──────── Pricing + Status ───────────────────────────────────────────────────────────────
+            // ──────── Pricing + Status ────────────────────────────────────────────────────────────────
             TextInput::make('total_price')
                 ->label('Total price')
                 ->numeric()
@@ -404,32 +466,105 @@ class BookingForm
         return $ref;
     }
 
-    /** Allowed START slots for a service as ['H:i' => 'g:i A']. */
-    protected static function slotOptionsForService($serviceId, ?string $bookingDate): array
+    /** Allowed START slots for a service with stylist working hours consideration */
+    protected static function slotOptionsForService($serviceId, ?string $bookingDate, $stylistId = null): array
     {
         if (is_null($serviceId) || is_null($bookingDate)) {
             return [];
         }
 
-        $slots = self::defaultStartSlotKeys();
+        $serviceDuration = self::serviceDurationMinutes($serviceId);
+        $slots = [];
 
-        if ($serviceId) {
-            $service = Service::find($serviceId);
-            if ($service && !empty($service->allowed_slots)) {
-                $raw = is_array($service->allowed_slots)
-                    ? $service->allowed_slots
-                    : (self::looksLikeJson($service->allowed_slots)
-                        ? (json_decode($service->allowed_slots, true) ?: [])
-                        : explode(',', (string) $service->allowed_slots));
+        // Get stylist working hours if stylist is selected
+        $workingStart = '09:00';
+        $workingEnd = '18:00';
+        $lunchStart = null;
+        $lunchEnd = null;
 
-                $slots = array_values(array_filter(
-                    array_map(fn($v) => trim((string) $v), $raw),
-                    fn($h) => preg_match('/^\d{2}:\d{2}$/', $h)
-                ));
+        if ($stylistId) {
+            $stylist = Stylist::find($stylistId);
+            if ($stylist) {
+                if ($stylist->start_time) {
+                    $workingStart = self::extractTimeFromValue($stylist->start_time);
+                }
+                if ($stylist->end_time) {
+                    $workingEnd = self::extractTimeFromValue($stylist->end_time);
+                }
+                if ($stylist->lunch_start) {
+                    $lunchStart = self::extractTimeFromValue($stylist->lunch_start);
+                }
+                if ($stylist->lunch_end) {
+                    $lunchEnd = self::extractTimeFromValue($stylist->lunch_end);
+                }
             }
         }
 
+        // Generate slots based on working hours
+        try {
+            $start = Carbon::createFromFormat('H:i', $workingStart);
+            $end = Carbon::createFromFormat('H:i', $workingEnd);
+            
+            for ($time = $start->copy(); $time->lt($end); $time->addMinutes(30)) {
+                $slotStart = $time->copy();
+                $slotEnd = $slotStart->copy()->addMinutes($serviceDuration);
+                
+                // Skip if slot would extend beyond working hours
+                if ($slotEnd->gt($end)) {
+                    continue;
+                }
+                
+                // Skip if slot conflicts with lunch break
+                if ($lunchStart && $lunchEnd) {
+                    $lunch_start_carbon = Carbon::createFromFormat('H:i', $lunchStart);
+                    $lunch_end_carbon = Carbon::createFromFormat('H:i', $lunchEnd);
+                    
+                    if ($slotStart->lt($lunch_end_carbon) && $slotEnd->gt($lunch_start_carbon)) {
+                        continue;
+                    }
+                }
+                
+                // Skip past time slots for today
+                if (Carbon::parse($bookingDate)->isToday()) {
+                    $now = Carbon::now();
+                    $slotDateTime = Carbon::parse($bookingDate . ' ' . $slotStart->format('H:i'));
+                    if ($slotDateTime->lte($now->copy()->addMinutes(30))) {
+                        continue;
+                    }
+                }
+                
+                // Skip if there's an existing booking conflict
+                if ($stylistId) {
+                    $conflictExists = Booking::query()
+                        ->where('stylist_id', $stylistId)
+                        ->whereDate('booking_date', $bookingDate)
+                        ->where('status', '!=', 'cancelled')
+                        ->whereRaw("TIME(booking_time) < ?", [$slotEnd->format('H:i:s')])
+                        ->whereRaw("TIME(end_time) > ?", [$slotStart->format('H:i:s')])
+                        ->exists();
+                        
+                    if ($conflictExists) {
+                        continue;
+                    }
+                }
+                
+                $timeKey = $slotStart->format('H:i');
+                $slots[$timeKey] = $slotStart->format('g:i A');
+            }
+        } catch (\Exception $e) {
+            // Fallback to default slots if there's an error
+            return self::defaultSlotOptions($bookingDate);
+        }
+
+        return $slots;
+    }
+
+    /** Default slot options fallback */
+    protected static function defaultSlotOptions(?string $bookingDate): array
+    {
+        $slots = self::defaultStartSlotKeys();
         $out = [];
+
         if ($bookingDate && Carbon::parse($bookingDate)->isToday()) {
             $now = Carbon::now();
             foreach ($slots as $h_i) {
