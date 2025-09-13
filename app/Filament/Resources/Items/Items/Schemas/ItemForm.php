@@ -24,6 +24,15 @@ class ItemForm
                 ->label('SKU')
                 ->maxLength(100),
 
+            TextInput::make('price')
+                ->label('Price (RM)')
+                ->prefix('RM')
+                ->numeric()
+                ->inputMode('decimal')
+                ->minValue(0)
+                ->step('0.01')
+                ->required(),
+
             Select::make('unit')
                 ->label('Unit')
                 ->options([

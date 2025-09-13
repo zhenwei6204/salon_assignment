@@ -20,10 +20,12 @@
             'unit',
             'stock',
             'reorder_level', 
+            'price',
         ];
 
         protected $casts = [
-        'low_stock_notified_at' => 'datetime',   
+        'low_stock_notified_at' => 'datetime', 
+        'price' => 'decimal:2',  
     ];
 
         public function stockMovements(): HasMany

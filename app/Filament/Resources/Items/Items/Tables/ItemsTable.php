@@ -41,6 +41,12 @@ class ItemsTable
                     ->label('Unit')
                     ->toggleable(isToggledHiddenByDefault: true),
 
+                TextColumn::make('price')
+                    ->label('Price')
+                    ->money('MYR')   
+                    ->sortable()
+                    ->toggleable(),
+
                 TextColumn::make('stock')
                     ->label('Stock')
                     ->badge()
@@ -147,6 +153,6 @@ class ItemsTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);     
+            ]);
     }
 }

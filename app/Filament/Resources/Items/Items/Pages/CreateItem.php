@@ -11,7 +11,7 @@ class CreateItem extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        // after creating an item, go back to the index
+        
         return static::getResource()::getUrl('index');
     }
 }
