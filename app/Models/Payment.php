@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Models;
-
+use App\Models\Booking; 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -38,9 +38,7 @@ class Payment extends Model
         };
     }
 
-    /**
-     * Get formatted payment method name
-     */
+   
     public function getFormattedPaymentMethodAttribute()
     {
         return match($this->payment_method) {
@@ -74,4 +72,31 @@ class Payment extends Model
     {
         return $this->payment_method === 'cash';
     }
+
+    public function refunds()
+{
+    return $this->hasMany(Refund::class);
 }
+
+public function latestRefund()
+{
+    return $this->hasOne(Refund::class)->latest();
+}
+
+public function hasRefund()
+{
+    return $this->refunds()->exists();
+}
+
+public function totalRefundAmount()
+{
+    return $this->refunds()->where('status', 'completed')->sum('refund_amount');
+}
+
+public function canBeRefunded()
+{
+    return $this->status === 'completed' || $this->status === 'cancelled' &&
+           $this->totalRefundAmount() < $this->amount &&
+           !$this->refunds()->whereIn('status', ['pending', 'approved', 'processing'])->exists();
+}
+}   

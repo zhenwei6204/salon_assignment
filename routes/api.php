@@ -25,79 +25,46 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 /*
 |--------------------------------------------------------------------------
-| Service API Routes - Public Access (for your teammates)
+| Service API Routes - RESTful Routes
 |--------------------------------------------------------------------------
 */
-
-// Service CRUD operations
-Route::prefix('services')->group(function () {
-    // GET /api/services - List all services with filters
-    Route::get('/', [ServiceApiController::class, 'index']);
+Route::prefix('service-data')->group(function () {
     
-    // GET /api/services/categories - Get all service categories (MUST come before {id} route)
-    Route::get('/categories', [ServiceApiController::class, 'getCategories']);
+    // Provide all services to inventory module
+    Route::get('/services', [ServiceApiController::class, 'getAllServices']);
     
-    // GET /api/services/by-duration/{duration} - Get services by max duration
-    Route::get('/by-duration/{duration}', [ServiceApiController::class, 'getByDuration']);
+    // Provide specific service details to inventory module
+    Route::get('/services/{id}', [ServiceApiController::class, 'getServiceById']);
     
-    // GET /api/services/by-price?min=50&max=100 - Get services by price range
-    Route::get('/by-price', [ServiceApiController::class, 'getByPriceRange']);
+    // Provide services by category to inventory module
+    Route::get('/services/category/{categoryId}', [ServiceApiController::class, 'getServicesByCategory']);
     
-    // GET /api/services/{id} - Get specific service (MUST come last among GET routes)
-    Route::get('/{id}', [ServiceApiController::class, 'show']);
+    // Provide all categories to inventory module
+    Route::get('/categories', [ServiceApiController::class, 'getAllCategories']);
     
-    // POST /api/services - Create new service (protected)
-    Route::post('/', [ServiceApiController::class, 'store'])->middleware('auth:sanctum');
+    // Provide active/available services only
+    Route::get('/services/active', [ServiceApiController::class, 'getActiveServices']);
     
-    // PUT /api/services/{id} - Update service (protected)
-    Route::put('/{id}', [ServiceApiController::class, 'update'])->middleware('auth:sanctum');
-    
-    // DELETE /api/services/{id} - Delete service (protected)
-    Route::delete('/{id}', [ServiceApiController::class, 'destroy'])->middleware('auth:sanctum');
+    // Webhook endpoint for inventory when service is updated
+    Route::post('/services/{id}/notify-update', [ServiceApiController::class, 'notifyServiceUpdate']);
 });
 
-/*
-|--------------------------------------------------------------------------
-| API Documentation Route
-|--------------------------------------------------------------------------
+/* 
+HOW INVENTORY MODULE WILL CONSUME THIS API:
+
+1. Get all services for item linking:
+   GET /api/service-data/services
+   
+2. Get specific service details:
+   GET /api/service-data/services/1
+   
+3. Get services by category:
+   GET /api/service-data/services/category/1
+   
+4. Get all categories:
+   GET /api/service-data/categories
+   
+5. Get only active services:
+   GET /api/service-data/services/active
+
 */
-Route::get('/docs', function () {
-    return response()->json([
-        'service' => 'Salon Service API',
-        'version' => '1.0.0',
-        'endpoints' => [
-            'GET /api/services' => 'List all services with optional filters',
-            'GET /api/services/{id}' => 'Get specific service details',
-            'POST /api/services' => 'Create new service (requires authentication)',
-            'PUT /api/services/{id}' => 'Update service (requires authentication)',
-            'DELETE /api/services/{id}' => 'Delete service (requires authentication)',
-            'GET /api/services/by-duration/{duration}' => 'Get services by maximum duration',
-            'GET /api/services/by-price' => 'Get services by price range (query: min, max)',
-            'GET /api/services/categories' => 'Get all service categories',
-        ],
-        'filters' => [
-            'available' => 'boolean - Filter by availability',
-            'category_id' => 'integer - Filter by category ID',
-            'min_price' => 'decimal - Minimum price filter',
-            'max_price' => 'decimal - Maximum price filter',
-            'min_duration' => 'integer - Minimum duration in minutes',
-            'max_duration' => 'integer - Maximum duration in minutes',
-            'search' => 'string - Search in name, description, benefits',
-            'per_page' => 'integer - Items per page (default: 15)'
-        ]
-    ]);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Health Check Route
-|--------------------------------------------------------------------------
-*/
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'healthy',
-        'service' => 'Service API',
-        'timestamp' => now()->toISOString(),
-        'timezone' => config('app.timezone')
-    ]);
-});

@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Payments;
-use Illuminate\Support\Arr; 
+
 use Illuminate\Support\Facades\Log;
 
 class BankTransferPaymentStrategy implements PaymentStrategyInterface
@@ -10,10 +10,9 @@ class BankTransferPaymentStrategy implements PaymentStrategyInterface
     {
         Log::info('Processing bank transfer payment', [
             'amount' => $amount,
-           'payment_data' => Arr::except($paymentData, ['account_number'])
+            'account_holder' => $paymentData['account_holder_name'] ?? 'N/A'
         ]);
 
-        // Validate payment data first
         $validation = $this->validatePaymentData($paymentData);
         if (!$validation['valid']) {
             return [
@@ -26,31 +25,16 @@ class BankTransferPaymentStrategy implements PaymentStrategyInterface
             ];
         }
 
-        // Simulate bank transfer processing
-        // In real implementation, you would integrate with banking APIs
-        $success = $this->simulateBankTransferProcessing($amount, $paymentData);
-
-        if ($success) {
-            return [
-                'success' => true,
-                'message' => 'Bank transfer initiated successfully. Processing may take 1-3 business days.',
-                'payment_method' => 'bank_transfer',
-                'amount' => $amount,
-                'payment_status' => 'pending', // Bank transfers are usually pending
-                'payment_date' => now()->toDateTimeString(),
-                'bank_name' => $paymentData['bank_name'] ?? null,
-                'account_holder' => $paymentData['account_holder_name'] ?? null
-            ];
-        } else {
-            return [
-                'success' => false,
-                'transaction_id' => null,
-                'message' => 'Bank transfer failed. Please verify your bank details.',
-                'payment_method' => 'bank_transfer',
-                'amount' => $amount,
-                'payment_status' => 'failed'
-            ];
-        }
+        // Bank transfers typically need manual verification
+        return [
+            'success' => true,
+            'message' => 'Bank transfer initiated. You will receive transfer details via email. Please complete the transfer within 24 hours.',
+            'payment_method' => 'bank_transfer',
+            'amount' => $amount,
+            'payment_status' => 'completed', // Bank transfers start as pending
+            'payment_date' => now()->toDateTimeString(),
+            'reference_number' => 'BT_' . time() . '_' . rand(1000, 9999)
+        ];
     }
 
     public function getPaymentMethodName(): string
@@ -58,31 +42,101 @@ class BankTransferPaymentStrategy implements PaymentStrategyInterface
         return 'Bank Transfer';
     }
 
+    public function getIcon(): string
+    {
+        return '🏦';
+    }
+
+    public function getDescription(): string
+    {
+        return 'Direct bank transfer payment';
+    }
+
+    public function getFormFields(): array
+    {
+        return [
+            [
+                'name' => 'account_holder_name',
+                'type' => 'text',
+                'label' => 'Account Holder Name',
+                'placeholder' => 'Full name as shown on bank account',
+                'required' => true,
+                'validation' => 'required|string|max:100',
+                'class' => 'form-control'
+            ],
+            [
+                'name' => 'bank_name',
+                'type' => 'text',
+                'label' => 'Bank Name',
+                'placeholder' => 'Your bank name',
+                'required' => true,
+                'validation' => 'required|string|max:100',
+                'class' => 'form-control',
+                'wrapper_class' => 'col-md-6'
+            ],
+            [
+                'name' => 'account_number',
+                'type' => 'text',
+                'label' => 'Account Number',
+                'placeholder' => 'Your account number',
+                'required' => true,
+                'validation' => 'required|string',
+                'class' => 'form-control',
+                'wrapper_class' => 'col-md-6'
+            ],
+            [
+                'name' => 'routing_number',
+                'type' => 'text',
+                'label' => 'Routing Number (Optional)',
+                'placeholder' => 'Bank routing number',
+                'required' => false,
+                'validation' => 'nullable|string',
+                'class' => 'form-control'
+            ]
+        ];
+    }
+
+    public function getClientValidationRules(): array
+    {
+        return [
+            'account_holder_name' => [
+                'required' => true,
+                'minLength' => 2
+            ],
+            'bank_name' => [
+                'required' => true,
+                'minLength' => 2
+            ],
+            'account_number' => [
+                'required' => true,
+                'minLength' => 5,
+                'numeric' => true
+            ]
+        ];
+    }
+
     public function validatePaymentData(array $paymentData): array
     {
         $errors = [];
 
-        // Validate account holder name
         if (!isset($paymentData['account_holder_name']) || empty($paymentData['account_holder_name'])) {
             $errors[] = 'Account holder name is required';
         }
 
-        // Validate bank name
         if (!isset($paymentData['bank_name']) || empty($paymentData['bank_name'])) {
             $errors[] = 'Bank name is required';
         }
 
-        // Validate account number
         if (!isset($paymentData['account_number']) || empty($paymentData['account_number'])) {
             $errors[] = 'Account number is required';
-        } elseif (!$this->isValidAccountNumber($paymentData['account_number'])) {
-            $errors[] = 'Invalid account number format';
+        } elseif (!preg_match('/^\d+$/', $paymentData['account_number'])) {
+            $errors[] = 'Account number must contain only numbers';
         }
 
-        // Validate routing number (if provided)
+        // Optional routing number validation
         if (isset($paymentData['routing_number']) && !empty($paymentData['routing_number'])) {
-            if (!$this->isValidRoutingNumber($paymentData['routing_number'])) {
-                $errors[] = 'Invalid routing number format';
+            if (!preg_match('/^\d{9}$/', $paymentData['routing_number'])) {
+                $errors[] = 'Routing number must be exactly 9 digits';
             }
         }
 
@@ -90,49 +144,5 @@ class BankTransferPaymentStrategy implements PaymentStrategyInterface
             'valid' => empty($errors),
             'errors' => $errors
         ];
-    }
-
-    private function simulateBankTransferProcessing(float $amount, array $paymentData): bool
-    {
-        // Simulate processing time
-        usleep(3000000); // 3 seconds (bank transfers take longer to process)
-
-        // Simulate 85% success rate (bank transfers can fail more often)
-        return mt_rand(1, 100) <= 85;
-    }
-
-    private function isValidAccountNumber(string $accountNumber): bool
-    {
-        // Remove spaces and special characters
-        $accountNumber = preg_replace('/[\s\-]/', '', $accountNumber);
-        
-        // Check if it's all digits and reasonable length (typically 8-17 digits)
-        return preg_match('/^\d{8,17}$/', $accountNumber);
-    }
-
-    private function isValidRoutingNumber(string $routingNumber): bool
-    {
-        // Remove spaces and special characters
-        $routingNumber = preg_replace('/[\s\-]/', '', $routingNumber);
-        
-        // Check if it's exactly 9 digits (US routing number format)
-        if (!preg_match('/^\d{9}$/', $routingNumber)) {
-            return false;
-        }
-
-        // Simple checksum validation (ABA routing number checksum)
-        return $this->validateRoutingChecksum($routingNumber);
-    }
-
-    private function validateRoutingChecksum(string $routingNumber): bool
-    {
-        $weights = [3, 7, 1, 3, 7, 1, 3, 7, 1];
-        $sum = 0;
-
-        for ($i = 0; $i < 9; $i++) {
-            $sum += (int)$routingNumber[$i] * $weights[$i];
-        }
-
-        return $sum % 10 === 0;
     }
 }

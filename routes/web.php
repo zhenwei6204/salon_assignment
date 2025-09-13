@@ -5,6 +5,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\RefundController;
 use App\Http\Controllers\PaymentController;
 use App\Models\Stylist;
 use App\Http\Controllers\ProfileController;
@@ -15,7 +16,6 @@ use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Models\User;
-
 /*
 |--------------------------------------------------------------------------
 | Public pages
@@ -94,6 +94,14 @@ Route::middleware(['auth'])->get('/payment-history', [PaymentController::class, 
 Route::middleware(['auth'])->get('/services/{service}/book', [BookingController::class, 'selectStylist'])
     ->name('booking.stylists');
 
+
+    Route::middleware(['auth'])->prefix('refunds')->name('refunds.')->group(function () {
+    Route::get('/', [RefundController::class, 'refund'])->name('refund');
+    Route::get('/create', [RefundController::class, 'create'])->name('create');
+    Route::post('/store', [RefundController::class, 'store'])->name('store');
+    Route::get('/{refund}', [RefundController::class, 'show'])->name('show');
+    Route::patch('/{refund}/cancel', [RefundController::class, 'cancel'])->name('cancel');
+});
 /*
 |--------------------------------------------------------------------------
 | Jetstream dashboard

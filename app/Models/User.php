@@ -69,6 +69,11 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
+    public function bookings()
+{
+    return $this->hasMany(Booking::class);
+}
+
     /**
      * Determine if the user can access the Filament admin panel
      */

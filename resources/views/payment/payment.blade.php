@@ -74,14 +74,14 @@
                     <span class="label">Stylist:</span>
                     <span class="value">{{ $bookingDetails['stylist']->name }}</span>
                 </div>
-         <div class="detail-row">
-    <span class="label">Date:</span>
-    <span class="value">{{ $booking->booking_date->format('l, F j, Y') }}</span>
-</div>
-<div class="detail-row">
-    <span class="label">Time:</span>
-    <span class="value">{{ $booking->booking_time->format('g:i A') }}</span>
-</div>
+                <div class="detail-row">
+                    <span class="label">Date:</span>
+                    <span class="value">{{ $booking->booking_date->format('l, F j, Y') }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Time:</span>
+                    <span class="value">{{ $booking->booking_time->format('g:i A') }}</span>
+                </div>
                 <div class="detail-row">
                     <span class="label">Customer:</span>
                     <span class="value">{{ $bookingDetails['customer_name'] }}</span>
@@ -103,39 +103,11 @@
                                {{ old('payment_method') == $method['key'] ? 'checked' : '' }} required>
                         <label for="{{ $method['key'] }}" class="payment-label">
                             <div class="payment-icon">
-                                @switch($method['key'])
-                                    @case('cash')
-                                        💵
-                                        @break
-                                    @case('credit_card')
-                                        💳
-                                        @break
-                                    @case('paypal')
-                                        🌐
-                                        @break
-                                    @case('bank_transfer')
-                                        🏦
-                                        @break
-                                    @default
-                                        💰
-                                @endswitch
+                                {{ $method['icon'] }}
                             </div>
                             <div class="payment-details">
                                 <strong>{{ $method['name'] }}</strong>
-                                @switch($method['key'])
-                                    @case('cash')
-                                        <small>Pay when you arrive at the salon</small>
-                                        @break
-                                    @case('credit_card')
-                                        <small>Secure credit/debit card payment</small>
-                                        @break
-                                    @case('paypal')
-                                        <small>Pay with your PayPal account</small>
-                                        @break
-                                    @case('bank_transfer')
-                                        <small>Direct bank transfer payment</small>
-                                        @break
-                                @endswitch
+                                <small>{{ $method['description'] }}</small>
                             </div>
                         </label>
                     </div>
@@ -149,26 +121,49 @@
                     <h4>Credit Card Information</h4>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="cardholder_name">Cardholder Name</label>
+                            <label for="cardholder_name">Cardholder Name <span class="required">*</span></label>
                             <input type="text" id="cardholder_name" name="cardholder_name" 
-                                   value="{{ old('cardholder_name', $bookingDetails['customer_name']) }}">
+                                   class="form-control"
+                                   value="{{ old('cardholder_name', $bookingDetails['customer_name']) }}"
+                                   placeholder="Name as shown on card">
+                            @error('cardholder_name')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                         <div class="form-group">
-                            <label for="card_number">Card Number</label>
-                            <input type="text" id="card_number" name="card_number" placeholder="1234 5678 9012 3456" 
-                                   value="{{ old('card_number') }}">
+                            <label for="card_number">Card Number <span class="required">*</span></label>
+                            <input type="text" id="card_number" name="card_number" 
+                                   class="form-control"
+                                   placeholder="1234 5678 9012 3456" 
+                                   value="{{ old('card_number') }}"
+                                   maxlength="19">
+                            @error('card_number')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="expiry_date">Expiry Date</label>
-                            <input type="text" id="expiry_date" name="expiry_date" placeholder="MM/YY" 
-                                   value="{{ old('expiry_date') }}">
+                            <label for="expiry_date">Expiry Date <span class="required">*</span></label>
+                            <input type="text" id="expiry_date" name="expiry_date" 
+                                   class="form-control"
+                                   placeholder="MM/YY" 
+                                   value="{{ old('expiry_date') }}"
+                                   maxlength="5">
+                            @error('expiry_date')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                         <div class="form-group">
-                            <label for="cvv">CVV</label>
-                            <input type="text" id="cvv" name="cvv" placeholder="123" 
-                                   value="{{ old('cvv') }}">
+                            <label for="cvv">CVV <span class="required">*</span></label>
+                            <input type="text" id="cvv" name="cvv" 
+                                   class="form-control"
+                                   placeholder="123" 
+                                   value="{{ old('cvv') }}"
+                                   maxlength="4">
+                            @error('cvv')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                     </div>
                 </div>
@@ -177,9 +172,14 @@
                 <div id="paypal_details" class="payment-details-form" style="display: none;">
                     <h4>PayPal Information</h4>
                     <div class="form-group">
-                        <label for="paypal_email">PayPal Email</label>
+                        <label for="paypal_email">PayPal Email <span class="required">*</span></label>
                         <input type="email" id="paypal_email" name="paypal_email" 
-                               value="{{ old('paypal_email', $bookingDetails['customer_email']) }}">
+                               class="form-control"
+                               value="{{ old('paypal_email', $bookingDetails['customer_email']) }}"
+                               placeholder="your.email@example.com">
+                        @error('paypal_email')
+                            <span class="text-danger">{{ $message }}</span>
+                        @enderror
                     </div>
                 </div>
 
@@ -188,27 +188,53 @@
                     <h4>Bank Transfer Information</h4>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="account_holder_name">Account Holder Name</label>
+                            <label for="account_holder_name">Account Holder Name <span class="required">*</span></label>
                             <input type="text" id="account_holder_name" name="account_holder_name" 
-                                   value="{{ old('account_holder_name', $bookingDetails['customer_name']) }}">
+                                   class="form-control"
+                                   value="{{ old('account_holder_name', $bookingDetails['customer_name']) }}"
+                                   placeholder="Full name as shown on bank account">
+                            @error('account_holder_name')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                         <div class="form-group">
-                            <label for="bank_name">Bank Name</label>
-                            <input type="text" id="bank_name" name="bank_name" 
-                                   value="{{ old('bank_name') }}">
+                            <label for="bank_name">Bank Name <span class="required">*</span></label>
+                                <select id="bank_name" name="bank_name" class="form-control" required>
+                                    <option value="" disabled selected>-- Select a Bank --</option>
+                                    @foreach($banks as $bank)
+                                        <option value="{{ $bank }}">{{ $bank }}</option>
+                                    @endforeach
+                                </select>
+                            @error('bank_name')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="account_number">Account Number</label>
+                            <label for="account_number">Account Number <span class="required">*</span></label>
                             <input type="text" id="account_number" name="account_number" 
-                                   value="{{ old('account_number') }}">
+                                   class="form-control"
+                                   value="{{ old('account_number') }}"
+                                   placeholder="Your account number">
+                            @error('account_number')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
                         <div class="form-group">
                             <label for="routing_number">Routing Number (Optional)</label>
                             <input type="text" id="routing_number" name="routing_number" 
-                                   value="{{ old('routing_number') }}">
+                                   class="form-control"
+                                   value="{{ old('routing_number') }}"
+                                   placeholder="Bank routing number">
+                            @error('routing_number')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
                         </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>Bank Transfer Instructions:</strong>
+                        <p>After submitting this form, you will receive bank transfer details via email. Please complete the transfer within 24 hours to confirm your booking.</p>
                     </div>
                 </div>
 
@@ -244,8 +270,8 @@
                         <button type="submit" class="complete-payment-btn">
                             Complete Booking
                         </button>
-                       <a href="{{ route('booking.confirmation', [$booking->service, $booking->stylist]) }}" 
-                     class="back-payment-btn">
+                        <a href="{{ route('booking.confirmation', [$booking->service, $booking->stylist]) }}" 
+                           class="back-payment-btn">
                             Back to Confirmation
                         </a>
                     </div>
@@ -289,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
     showPaymentDetails();
 
     // Form validation
-    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+    document.getElementById('payment-form').addEventListener('submit', function(e) {
         const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
         
         if (!selectedMethod) {
@@ -330,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (!accountHolderName || !bankName || !accountNumber) {
                     isValid = false;
-                    errorMessage = 'Please fill in all bank transfer details.';
+                    errorMessage = 'Please fill in all required bank transfer details.';
                 }
                 break;
         }
@@ -362,10 +388,130 @@ document.addEventListener('DOMContentLoaded', function() {
             e.target.value = value;
         });
     }
+
+    // Format CVV input (numbers only)
+    const cvvInput = document.getElementById('cvv');
+    if (cvvInput) {
+        cvvInput.addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
+    }
+
+    // Format account number (numbers only)
+    const accountNumberInput = document.getElementById('account_number');
+    if (accountNumberInput) {
+        accountNumberInput.addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
+    }
+
+    // Format routing number (numbers only)
+    const routingNumberInput = document.getElementById('routing_number');
+    if (routingNumberInput) {
+        routingNumberInput.addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
+    }
 });
 </script>
 
 <style>
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.header h1 {
+    color: #2c5aa0;
+    margin-bottom: 0.5rem;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.alert-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.alert-info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.booking-progress {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 3rem;
+    gap: 2rem;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.progress-step.completed .step-number {
+    background: #28a745;
+    color: white;
+}
+
+.progress-step.active .step-number {
+    background: #2c5aa0;
+    color: white;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e9ecef;
+    font-weight: bold;
+}
+
+.booking-summary {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.summary-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.price-highlight {
+    color: #2c5aa0;
+    font-weight: bold;
+}
+
 .payment-section {
     background: white;
     border-radius: 15px;
@@ -425,6 +571,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .form-group {
     flex: 1;
+    margin-bottom: 1rem;
 }
 
 .form-group label {
@@ -440,6 +587,56 @@ document.addEventListener('DOMContentLoaded', function() {
     border: 1px solid #ddd;
     border-radius: 5px;
     font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input:focus {
+    border-color: #2c5aa0;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.1);
+}
+
+.form-group select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: white; 
+
+
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%236c757d%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right .7em top 50%;
+    background-size: .65em auto;
+}
+
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+    box-sizing: border-box; 
+}
+
+
+.form-group input:focus,
+.form-group select:focus {
+    border-color: #2c5aa0;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.1);
+}
+
+.required {
+    color: #dc3545;
+}
+
+.text-danger {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
 }
 
 .cash-info {
@@ -499,6 +696,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .complete-payment-btn:hover {
     background: #218838;
+    transform: translateY(-2px);
 }
 
 .back-payment-btn {
@@ -508,15 +706,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .back-payment-btn:hover {
     background: #545b62;
+    transform: translateY(-2px);
 }
 
+/* Responsive design */
 @media (max-width: 768px) {
+    .summary-card {
+        grid-template-columns: 1fr;
+    }
+    
     .action-buttons {
         flex-direction: column;
     }
     
     .form-row {
         flex-direction: column;
+        gap: 0;
+    }
+    
+    .booking-progress {
+        gap: 1rem;
+    }
+    
+    .progress-step {
+        font-size: 0.8rem;
+    }
+    
+    .step-number {
+        width: 35px;
+        height: 35px;
     }
 }
 </style>

@@ -4,6 +4,7 @@ namespace App\Payments;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
+
 class CreditCardPaymentStrategy implements PaymentStrategyInterface
 {
     public function processPayment(float $amount, array $paymentData = []): array
@@ -27,7 +28,6 @@ class CreditCardPaymentStrategy implements PaymentStrategyInterface
         }
 
         // Simulate credit card processing
-        // In real implementation, you would call Stripe, Square, etc.
         $success = $this->simulateCreditCardProcessing($amount, $paymentData);
 
         if ($success) {
@@ -54,6 +54,94 @@ class CreditCardPaymentStrategy implements PaymentStrategyInterface
     public function getPaymentMethodName(): string
     {
         return 'Credit/Debit Card';
+    }
+
+    public function getIcon(): string
+    {
+        return '💳';
+    }
+
+    public function getDescription(): string
+    {
+        return 'Secure credit/debit card payment';
+    }
+
+    public function getFormFields(): array
+    {
+        return [
+            [
+                'name' => 'cardholder_name',
+                'type' => 'text',
+                'label' => 'Cardholder Name',
+                'placeholder' => 'Name as shown on card',
+                'required' => true,
+                'validation' => 'required|string|max:100',
+                'class' => 'form-control'
+            ],
+            [
+                'name' => 'card_number',
+                'type' => 'text',
+                'label' => 'Card Number',
+                'placeholder' => '1234 5678 9012 3456',
+                'required' => true,
+                'validation' => 'required|string',
+                'class' => 'form-control card-number',
+                'data_attributes' => [
+                    'data-mask' => 'credit-card'
+                ]
+            ],
+            [
+                'name' => 'expiry_date',
+                'type' => 'text',
+                'label' => 'Expiry Date',
+                'placeholder' => 'MM/YY',
+                'required' => true,
+                'validation' => 'required|string',
+                'class' => 'form-control expiry-date',
+                'data_attributes' => [
+                    'data-mask' => 'expiry'
+                ],
+                'wrapper_class' => 'col-md-6'
+            ],
+            [
+                'name' => 'cvv',
+                'type' => 'text',
+                'label' => 'CVV',
+                'placeholder' => '123',
+                'required' => true,
+                'validation' => 'required|string|min:3|max:4',
+                'class' => 'form-control cvv',
+                'data_attributes' => [
+                    'data-mask' => 'numeric',
+                    'maxlength' => '4'
+                ],
+                'wrapper_class' => 'col-md-6'
+            ]
+        ];
+    }
+
+    public function getClientValidationRules(): array
+    {
+        return [
+            'cardholder_name' => [
+                'required' => true,
+                'minLength' => 2
+            ],
+            'card_number' => [
+                'required' => true,
+                'creditCard' => true
+            ],
+            'expiry_date' => [
+                'required' => true,
+                'expiryDate' => true
+            ],
+            'cvv' => [
+                'required' => true,
+                'numeric' => true,
+                'minLength' => 3,
+                'maxLength' => 4
+            ]
+        ];
     }
 
     public function validatePaymentData(array $paymentData): array
