@@ -47,11 +47,11 @@
                 <form method="GET" id="dateForm" action="{{ route('booking.select.time', [$service, $stylist]) }}">
                     <input type="date" 
                            name="date" 
-                           value="{{ $selectedDate }}"
+                           value="{{ $selectedDate ?? now()->format('Y-m-d') }}"
                            min="{{ date('Y-m-d') }}"
                            max="{{ date('Y-m-d', strtotime('+30 days')) }}"
                            class="date-input"
-                           onchange="document.getElementById('dateForm').submit()">
+                           onchange="document.getElementById('dateForm').submit()"> 
                 </form>
             </div>
         </div>
@@ -77,18 +77,23 @@
             @else
                 <div class="no-results">
                     <h3>No Available Times</h3>
-                    <p>Sorry, no appointment slots are available for {{ date('F j, Y', strtotime($selectedDate)) }}. Please select a different date.</p>
+                    <p>
+                    Sorry, no appointment slots are available for
+                    {{ \Carbon\Carbon::parse($selectedDate)->format('F j, Y') }}.
+                    Please select a different date.
+                    </p>
+
                     <div class="alternative-dates">
-                        <h4>Try these alternative dates:</h4>
-                        @for($i = 1; $i <= 3; $i++)
-                            @php
-                                $altDate = date('Y-m-d', strtotime($selectedDate . " +{$i} days"));
-                            @endphp
-                            <a href="{{ route('booking.select.time', [$service, $stylist]) }}?date={{ $altDate }}" 
-                               class="alt-date-link">
-                                {{ date('F j, Y', strtotime($altDate)) }}
-                            </a>
-                        @endfor
+                    <h4>Try these alternative dates:</h4>
+                    @for ($i = 1; $i <= 3; $i++)
+                        @php
+                            $alt = \Carbon\Carbon::parse($selectedDate)->addDays($i);
+                        @endphp
+                        <a href="{{ route('booking.select.time', [$service, $stylist]) }}?date={{ $alt->format('Y-m-d') }}"
+                            class="alt-date-link">
+                            {{ $alt->format('F j, Y') }}
+                        </a>
+                    @endfor
                     </div>
                 </div>
             @endif

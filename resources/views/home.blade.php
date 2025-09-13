@@ -852,12 +852,12 @@
 @section('content')
 <body>
 
-    <!-- Hero Section -->
+    <!-- Hero Section -->   
     <section class="hero-section" id="home">
         <video class="hero-video" autoplay muted loop playsinline>
-            <source src="../resources/background_video.mp4    " type="video/mp4">
-            Your browser does not support the video tag.
-        </video>
+    <source src="{{ asset('videos/background_video.mp4') }}" type="video/mp4">
+    Your browser does not support the video tag.
+</video>
         <div class="video-overlay"></div>
         <div class="hero-content">
             <h1 class="hero-title">Experience Premium Beauty Care</h1>

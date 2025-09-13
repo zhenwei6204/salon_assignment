@@ -55,5 +55,16 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         Fortify::redirects('register', '/login');
+
+        Fortify::authenticateUsing(function ($request) {
+            $user = \App\Models\User::where('email', $request->email)->first();
+        
+            if ($user && \Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+                return $user;
+            }
+        
+            return null;
+        });
+    
     }
 }
