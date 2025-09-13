@@ -6,75 +6,190 @@
 
 {{-- Page styles --}}
 <style>
-.bookings-page{max-width:900px;margin:60px auto;padding:0 18px}
-.page-title{font-size:clamp(24px,3vw,32px);font-weight:800;margin-bottom:14px}
-.main-content{max-width:1400px;margin:100px auto 2rem;min-height:calc(100vh - 200px);margin-top:150px}
-.filters{position:sticky;top:70px;background:#fff;border:1px solid #eef0f3;border-radius:14px;padding: 25px 25px 25px;box-shadow:0 4px 16px rgba(0,0,0,.04);z-index:5;margin-bottom:14px}
-.filters-row{display:grid;grid-template-columns:1.2fr .8fr .6fr .6fr auto;gap:10px;align-items:end}
-.f-col{display:flex;flex-direction:column}
-.f-label{font-size:12px;color:#6b7280;margin-bottom:6px}
-.f-input{height:40px;border:1px solid #e5e7eb;border-radius:10px;padding:0 12px}
-.f-input:focus{outline:none;border-color:#111827;box-shadow:0 0 0 3px rgba(17,24,39,.08)}
-.f-actions{display:flex;gap:8px;align-items:center}
-.filters-meta{padding:6px 2px 0;color:#6b7280;font-size:13px;margin-bottom:10px}
-.filters-meta{pointer-events:none}
+.bookings-page {
+  max-width: 1200px;  /* bigger container */
+  margin: 80px auto;
+  padding: 0 24px;
+}
 
-.list{display:flex;flex-direction:column;gap:12px}
-.row-card{background:#fff;border:1px solid #eef0f3;border-radius:16px;padding:14px 14px 12px;box-shadow:0 4px 14px rgba(0,0,0,.05);transition:box-shadow .15s ease, transform .15s ease}
-.row-card:hover{box-shadow:0 8px 22px rgba(0,0,0,.07);transform:translateY(-1px)}
-.row-head{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.row-title h3{margin:4px 0 4px;font-size:18px}
-.muted{color:#4b5563}
-.ref-chip{display:inline-block;background:#f3f4f6;color:#6b7280;border-radius:999px;padding:3px 8px;font-size:12px}
+.page-title {
+  font-size: clamp(28px, 3.5vw, 38px); /* bigger heading */
+  font-weight: 800;
+  margin-bottom: 24px;
+}
 
-.badge{padding:6px 10px;font-size:12px;font-weight:700;border-radius:999px;white-space:nowrap;height:fit-content}
-.badge--booked{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
-.badge--cancelled{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
-.badge--completed{background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe}
+.main-content {
+  max-width: 1600px;
+  margin: 120px auto 2rem;
+  min-height: calc(100vh - 240px);
+  margin-top: 180px;
+}
 
-.row-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 10px;margin:10px 0 6px}
-.kv{display:flex;flex-direction:column;border:1px dashed #e5e7eb;border-radius:10px;padding:8px}
-.kv--wide{grid-column:1/-1}
-.kv dt{font-size:12px;color:#6b7280}
-.kv dd{font-weight:700}
+.filters {
+  position: sticky;
+  top: 80px;
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 16px;
+  padding: 30px 28px 22px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
+  z-index: 5;
+  margin-bottom: 20px;
+}
 
-.row-actions{display:flex;justify-content:flex-end}
+.filters-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.8fr 0.8fr auto;
+  gap: 14px;
+  align-items: end;
+}
 
-.alert{padding:12px 14px;border-radius:10px;margin-bottom:12px;font-weight:600}
-.alert-success{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
-.alert-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.f-col { display:flex; flex-direction:column }
+.f-label { font-size: 14px; color: #6b7280; margin-bottom: 8px }
+.f-input {
+  height: 46px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+.f-input:focus {
+  outline: none;
+  border-color: #111827;
+  box-shadow: 0 0 0 3px rgba(17,24,39,.08);
+}
 
-.btn{appearance:none;border:0;padding:10px 14px; margin-top: 10px; border-radius:10px;font-weight:700;cursor:pointer;transition:transform .06s ease, box-shadow .12s ease}
-.btn:active{transform:translateY(1px)}
-.btn-primary{background:#111827;color:#fff}
-.btn-primary:hover{box-shadow:0 6px 16px rgba(17,24,39,.18)}
-.btn-danger{background:#dc2626;color:#fff}
-.btn-danger:hover{background:#b91c1c}
-.btn-muted{background:#f3f4f6;color:#6b7280}
-.btn-muted[disabled]{opacity:.7;cursor:not-allowed}
+.f-actions { display:flex; gap:10px; align-items:center }
 
-.empty-state{background:#fff;border:1px solid #eef0f3;border-radius:16px;padding:36px 24px;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.04)}
-.empty-icon{font-size:40px}
-.link{color:#111827;text-decoration:underline}
+.filters-meta {
+  padding: 8px 2px 0;
+  color: #6b7280;
+  font-size: 15px;
+  margin-bottom: 14px;
+  pointer-events:none;
+}
 
-.pagination-wrap{margin-top:14px;display:flex;flex-direction:column;gap:8px}
-.page-legend{color:#6b7280;font-size:13px}
-.pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.pager a,.pager span{display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;padding:0 12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;font-weight:700;text-decoration:none;color:#111827}
-.pager a:hover{box-shadow:0 4px 12px rgba(0,0,0,.06)}
-.pager .is-current{background:#111827;color:#fff;border-color:#111827}
-.pager .is-disabled{opacity:.45;pointer-events:none}
-.pager .gap{border-style:dashed;color:#6b7280;min-width:28px}
+.list { display:flex; flex-direction:column; gap:18px }
+
+.row-card {
+  background:#fff;
+  border:1px solid #eef0f3;
+  border-radius:18px;
+  padding:20px 20px 18px;
+  box-shadow:0 6px 18px rgba(0,0,0,.06);
+  transition:box-shadow .15s ease, transform .15s ease;
+}
+.row-card:hover {
+  box-shadow:0 10px 26px rgba(0,0,0,.08);
+  transform:translateY(-2px);
+}
+
+.row-head { display:flex; gap:14px; justify-content:space-between; align-items:flex-start; margin-bottom:12px }
+.row-title h3 { margin:6px 0; font-size:20px }
+.muted { color:#4b5563; font-size:15px }
+
+.ref-chip {
+  display:inline-block;
+  background:#f3f4f6;
+  color:#6b7280;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:13px;
+}
+
+.badge {
+  padding:7px 12px;
+  font-size:13px;
+  font-weight:700;
+  border-radius:999px;
+  white-space:nowrap;
+}
+.badge--booked { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0 }
+.badge--cancelled { background:#fef2f2; color:#991b1b; border:1px solid #fecaca }
+.badge--completed { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe }
+
+.row-grid {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px 14px;
+  margin:14px 0 10px;
+}
+.kv {
+  display:flex;
+  flex-direction:column;
+  border:1px dashed #e5e7eb;
+  border-radius:12px;
+  padding:10px;
+}
+.kv dt { font-size:13px; color:#6b7280 }
+.kv dd { font-weight:700; font-size:15px }
+
+.row-actions { display:flex; justify-content:flex-end; gap:12px }
+
+.alert { padding:14px 16px; border-radius:12px; margin-bottom:14px; font-weight:600; font-size:15px }
+.alert-success { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0 }
+.alert-error { background:#fef2f2; color:#991b1b; border:1px solid #fecaca }
+
+.btn {
+  appearance:none;
+  border:0;
+  padding:12px 16px;
+  border-radius:12px;
+  font-weight:700;
+  cursor:pointer;
+  transition:transform .06s ease, box-shadow .12s ease;
+  font-size:15px;
+}
+.btn:active { transform:translateY(1px) }
+.btn-primary { background:#111827; color:#fff }
+.btn-primary:hover { box-shadow:0 6px 18px rgba(17,24,39,.2) }
+.btn-danger { background:#dc2626; color:#fff }
+.btn-danger:hover { background:#b91c1c }
+.btn-muted { background:#f3f4f6; color:#6b7280 }
+.btn-muted[disabled] { opacity:.7; cursor:not-allowed }
+
+.empty-state {
+  background:#fff;
+  border:1px solid #eef0f3;
+  border-radius:18px;
+  padding:48px 32px;
+  text-align:center;
+  box-shadow:0 6px 22px rgba(0,0,0,.06);
+}
+.empty-icon { font-size:48px }
+.link { color:#111827; text-decoration:underline; font-size:15px }
+
+.pagination-wrap { margin-top:18px; display:flex; flex-direction:column; gap:10px }
+.page-legend { color:#6b7280; font-size:14px }
+.pager { display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+.pager a,.pager span {
+  min-width:40px; height:40px;
+  padding:0 14px;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  background:#fff;
+  font-weight:700;
+  font-size:15px;
+  text-decoration:none;
+  color:#111827;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.pager a:hover { box-shadow:0 4px 12px rgba(0,0,0,.08) }
+.pager .is-current { background:#111827; color:#fff; border-color:#111827 }
+.pager .is-disabled { opacity:.45; pointer-events:none }
+.pager .gap { border-style:dashed; color:#6b7280; min-width:30px }
 
 @media (max-width: 880px){
-  .filters-row{grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+  .filters-row{grid-template-columns:1fr 1fr 1fr 1fr; gap:12px}
   .f-actions{grid-column:1/-1}
   .row-grid{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width: 560px){
   .filters-row{grid-template-columns:1fr 1fr}
   .row-grid{grid-template-columns:1fr}
+  .row-actions{justify-content:center}
 }
+
 </style>
 
 <div class="bookings-page">
@@ -136,7 +251,7 @@
         <div class="empty-state">
             <div class="empty-icon">🔭</div>
             <h2>No bookings found</h2>
-            <p>Try changing the filters or <a class="link" href="{{ route('categories.index') }}">book a service</a>.</p>
+            <p>Try changing the filters or <a class="link" href="{{ route('services.index') }}">book a service</a>.</p>
         </div>
     @else
         {{-- Straight single column list --}}
@@ -156,8 +271,14 @@
                     $isCompleted = $status === 'completed';
 
                     $now = now(config('app.timezone'));
-                    $canCancel = !$isCancelled && !$isCompleted && $start->gt($now->copy()->addHours(2));
+
+                    // ✅ Updated cancellation rule
+                    $canCancel = !$isCancelled 
+                        && !$isCompleted 
+                        && $start->isFuture() 
+                        && $start->gt($now->copy()->addHours(2));
                 @endphp
+
 
                 <article class="row-card">
                     <header class="row-head">
@@ -199,24 +320,27 @@
                         @endif
                     </dl>
 
-                    <footer class="row-actions">
-                        @if($canCancel)
-                            <form method="POST" action="{{ route('booking.cancel', $b) }}" 
-                                  onsubmit="return confirm('Cancel this booking?');">
-                                @csrf
-                                @method('PATCH')
-                                <button type="submit" class="btn btn-danger">Cancel Booking</button>
-                            </form>
+                <footer class="row-actions">
+                    @if($canCancel)
+                        <form method="POST" action="{{ route('booking.cancel', $b) }}" 
+                            onsubmit="return confirm('Cancel this booking?');">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="btn btn-danger">Cancel Booking</button>
+                        </form>
+                    @else
+                        @if($isCancelled)
+                            <button class="btn btn-muted" disabled>Already Cancelled</button>
+                        @elseif($isCompleted)
+                            <button class="btn btn-muted" disabled>Completed</button>
+                        @elseif($start->isPast())
+                            <button class="btn btn-muted" disabled>Appointment Passed</button>
                         @else
-                            @if($isCancelled)
-                                <button class="btn btn-muted" disabled>Already Cancelled</button>
-                            @elseif($isCompleted)
-                                <button class="btn btn-muted" disabled>Completed</button>
-                            @else
-                                <button class="btn btn-muted" disabled>Cannot Cancel (too close to appointment)</button>
-                            @endif
+                            <button class="btn btn-muted" disabled>Cannot Cancel (too close to appointment)</button>
                         @endif
-                    </footer>
+                    @endif
+                </footer>
+
                 </article>
             @endforeach
         </div>

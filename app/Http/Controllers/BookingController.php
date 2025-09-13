@@ -264,26 +264,18 @@ class BookingController extends Controller
  */
     public function cancel(Request $request, Booking $booking)
     {
-        $user = $request->user();
-        
-        // Check if user owns this booking (by user_id OR email fallback)
-        if ($booking->user_id !== $user->id && $booking->customer_email !== $user->email) {
-            abort(403, 'You are not allowed to cancel this booking.');
-        }
+        /** @var \App\Services\BookingFacade $facade */
+        $facade = app(\App\Services\BookingFacade::class);
 
-        if ($booking->status === 'completed') {
-            return back()->with('error', 'Completed bookings cannot be cancelled.');
+        try {
+            $facade->cancelBooking($booking, $request->user());
+            return redirect()->route('bookings.index')
+                ->with('success', 'Booking cancelled successfully. A confirmation email has been sent.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
         }
-        if ($booking->status === 'cancelled') {
-            return back()->with('info', 'This booking is already cancelled.');
-        }
-
-        $booking->status = 'cancelled';
-        $booking->save();
-
-        return redirect()->route('bookings.index')
-            ->with('success', 'Booking cancelled successfully.');
     }
+
 
     /**
  * Helper: build available slots for a day/stylist/service duration
