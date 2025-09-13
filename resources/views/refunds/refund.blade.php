@@ -106,7 +106,7 @@
     </div>
 
     {{-- Filters --}}
-    <form id="filters" class="filters" method="GET" action="{{ route('refunds.index') }}">
+    <form id="filters" class="filters" method="GET" action="{{ route('refunds.refund') }}">
         <div class="filters-row">
             <div class="f-col">
                 <label class="f-label">Search</label>
@@ -137,7 +137,7 @@
 
             <div class="f-actions">
                 <button type="submit" class="btn btn-primary">Apply</button>
-                <a href="{{ route('refunds.index') }}" class="btn btn-muted">Clear</a>
+                <a href="{{ route('refunds.refund') }}" class="btn btn-muted">Clear</a>
             </div>
         </div>
     </form>

@@ -609,7 +609,7 @@
 
     <!-- Action Buttons -->
     <div class="success-actions">
-        <a href="{{ route('categories.index') }}" class="book-another-btn">
+        <a href="{{ route('services.index') }}" class="book-another-btn">
             Book Another Service
         </a>
         <a href="{{ url('/') }}" class="home-btn">

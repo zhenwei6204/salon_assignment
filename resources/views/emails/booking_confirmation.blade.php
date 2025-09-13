@@ -75,7 +75,7 @@
         <td class="hd">
           <div class="brand">
             <div class="logo"></div>
-            <div class="bname">Salon Good</div>
+            <div class="bname">🌟 Salon Good</div>
           </div>
         </td>
       </tr>
