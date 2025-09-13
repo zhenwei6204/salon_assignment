@@ -15,21 +15,21 @@
         <div class="stat-card">
             <div class="stat-icon">💰</div>
             <div class="stat-content">
-                <h3>${{ number_format($stats['total_amount'], 2) }}</h3>
+                <h3>${{ number_format($stats['total_amount'] ?? 0, 2) }}</h3>
                 <p>Total Spent</p>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-icon">✅</div>
             <div class="stat-content">
-                <h3>{{ $stats['completed_count'] }}</h3>
+                <h3>{{ $stats['completed_count'] ?? 0 }}</h3>
                 <p>Completed Payments</p>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-icon">⏳</div>
             <div class="stat-content">
-                <h3>{{ $stats['pending_count'] }}</h3>
+                <h3>{{ $stats['pending_count'] ?? 0 }}</h3>
                 <p>Pending Payments</p>
             </div>
         </div>
@@ -41,18 +41,18 @@
             <div class="filters-row">
                 <div class="filter-group">
                     <label for="search">Search</label>
-                    <input type="text" id="search" name="q" value="{{ $filters['q'] }}" 
-                           placeholder="Search by payment ref, booking ref, or service...">
+                    <input type="text" id="search" name="q" value="{{ $filters['q'] ?? '' }}" 
+                        placeholder="Search by payment ref, booking ref, or service...">
                 </div>
 
                 <div class="filter-group">
                     <label for="method">Payment Method</label>
                     <select id="method" name="method">
                         <option value="">All Methods</option>
-                        <option value="cash" {{ $filters['method'] == 'cash' ? 'selected' : '' }}>Cash Payment</option>
-                        <option value="credit_card" {{ $filters['method'] == 'credit_card' ? 'selected' : '' }}>Credit/Debit Card</option>
-                        <option value="paypal" {{ $filters['method'] == 'paypal' ? 'selected' : '' }}>PayPal</option>
-                        <option value="bank_transfer" {{ $filters['method'] == 'bank_transfer' ? 'selected' : '' }}>Bank Transfer</option>
+                        <option value="cash" {{ ($filters['method'] ?? '') == 'cash' ? 'selected' : '' }}>Cash Payment</option>
+                        <option value="credit_card" {{ ($filters['method'] ?? '') == 'credit_card' ? 'selected' : '' }}>Credit/Debit Card</option>
+                        <option value="paypal" {{ ($filters['method'] ?? '') == 'paypal' ? 'selected' : '' }}>PayPal</option>
+                        <option value="bank_transfer" {{ ($filters['method'] ?? '') == 'bank_transfer' ? 'selected' : '' }}>Bank Transfer</option>
                     </select>
                 </div>
 
@@ -60,9 +60,9 @@
                     <label for="status">Status</label>
                     <select id="status" name="status">
                         <option value="">All Statuses</option>
-                        <option value="completed" {{ $filters['status'] == 'completed' ? 'selected' : '' }}>Completed</option>
-                        <option value="pending" {{ $filters['status'] == 'pending' ? 'selected' : '' }}>Pending</option>
-                        <option value="failed" {{ $filters['status'] == 'failed' ? 'selected' : '' }}>Failed</option>
+                        <option value="completed" {{ ($filters['status'] ?? '') == 'completed' ? 'selected' : '' }}>Completed</option>
+                        <option value="pending" {{ ($filters['status'] ?? '') == 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="failed" {{ ($filters['status'] ?? '') == 'failed' ? 'selected' : '' }}>Failed</option>
                     </select>
                 </div>
             </div>
@@ -70,12 +70,12 @@
             <div class="filters-row">
                 <div class="filter-group">
                     <label for="from">From Date</label>
-                    <input type="date" id="from" name="from" value="{{ $filters['from'] }}">
+                    <input type="date" id="from" name="from" value="{{ $filters['from'] ?? '' }}">
                 </div>
 
                 <div class="filter-group">
                     <label for="to">To Date</label>
-                    <input type="date" id="to" name="to" value="{{ $filters['to'] }}">
+                    <input type="date" id="to" name="to" value="{{ $filters['to'] ?? '' }}">
                 </div>
 
                 <div class="filter-actions">
@@ -95,7 +95,7 @@
                         <div class="payment-header">
                             <div class="payment-method">
                                 <span class="method-icon">
-                                    @switch($payment->payment_method)
+                                    @switch($payment->payment_method ?? 'default')
                                         @case('cash')
                                             💵
                                             @break
@@ -113,20 +113,27 @@
                                     @endswitch
                                 </span>
                                 <div class="method-details">
-                                    <h4>{{ $payment->formatted_payment_method }}</h4>
-                                    <p class="payment-ref">{{ $payment->payment_ref ?? 'N/A' }}</p>
+                                    <h4>{{ $payment->formatted_payment_method ?? 'Payment Method' }}</h4>
                                 </div>
                             </div>
                             <div class="payment-status">
-                                <span class="status-badge status-{{ $payment->status_badge_color }}">
-                                    {{ ucfirst($payment->status) }}
+                                @php
+                                    $statusColor = match($payment->status ?? 'pending') {
+                                        'completed' => 'success',
+                                        'pending' => 'warning',
+                                        'failed' => 'danger',
+                                        default => 'warning'
+                                    };
+                                @endphp
+                                <span class="status-badge status-{{ $statusColor }}">
+                                    {{ ucfirst($payment->status ?? 'pending') }}
                                 </span>
                             </div>
                         </div>
 
                         <div class="payment-body">
                             <div class="payment-amount">
-                                <span class="amount">${{ number_format($payment->amount, 2) }}</span>
+                                <span class="amount">${{ number_format($payment->amount ?? 0, 2) }}</span>
                             </div>
 
                             <div class="payment-details">
@@ -146,10 +153,10 @@
                                     <span class="label">Payment Date:</span>
                                     <span class="value">{{ $payment->created_at->format('M j, Y \a\t g:i A') }}</span>
                                 </div>
-                                @if($payment->transaction_id)
+                                @if($payment->id)
                                     <div class="detail-row">
-                                        <span class="label">Transaction ID:</span>
-                                        <span class="value">{{ $payment->transaction_id }}</span>
+                                        <span class="label">Payment ID:</span>
+                                        <span class="value">{{ $payment->id }}</span>
                                     </div>
                                 @endif
                             </div>
@@ -164,7 +171,14 @@
                                     </a>
                                 @endif
                                 
-                                @if($payment->isPending() && $payment->isCashPayment())
+                                @if(method_exists($payment, 'canBeRefunded') && $payment->canBeRefunded() && $payment->booking)
+                                    <a href="{{ route('refunds.create', ['booking_id' => $payment->booking->id]) }}" 
+                                       class="refund-btn">
+                                        Request Refund
+                                    </a>
+                                @endif
+                                
+                                @if(method_exists($payment, 'isPending') && method_exists($payment, 'isCashPayment') && $payment->isPending() && $payment->isCashPayment())
                                     <span class="pending-note">Pay at salon</span>
                                 @endif
                             </div>
@@ -172,7 +186,7 @@
                     </div>
                 @endforeach
             </div>
-
+            
             <!-- Pagination -->
             <div class="pagination-wrapper">
                 {{ $payments->links() }}
@@ -182,7 +196,7 @@
                 <div class="empty-icon">💳</div>
                 <h3>No payment history found</h3>
                 <p>
-                    @if(array_filter($filters))
+                    @if(array_filter($filters ?? []))
                         No payments match your current filters. 
                         <a href="{{ route('payments.history') }}" class="clear-filters-link">Clear filters</a> to see all payments.
                     @else
@@ -208,6 +222,21 @@
 </div>
 
 <style>
+.refund-btn {
+    background: #f59e0b;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.refund-btn:hover {
+    background: #d97706;
+}
+
 .page-header {
     text-align: center;
     margin-bottom: 3rem;

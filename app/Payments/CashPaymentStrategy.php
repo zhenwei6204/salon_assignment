@@ -4,20 +4,18 @@ namespace App\Payments;
 
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Cash Payment Strategy
+ */
 class CashPaymentStrategy implements PaymentStrategyInterface
 {
     public function processPayment(float $amount, array $paymentData = []): array
     {
-        Log::info('Processing cash payment', [
-            'amount' => $amount,
-            'payment_data' => $paymentData
-        ]);
+        Log::info('Processing cash payment', ['amount' => $amount]);
 
-        // Cash payment doesn't require actual processing
-        // Just log and return success
         return [
             'success' => true,
-            'message' => 'Cash payment scheduled. Please pay at the salon.',
+            'message' => 'Cash payment scheduled for appointment.',
             'payment_method' => 'cash',
             'amount' => $amount,
             'payment_status' => 'pending',
@@ -27,15 +25,37 @@ class CashPaymentStrategy implements PaymentStrategyInterface
 
     public function getPaymentMethodName(): string
     {
-        return 'Cash Payment at Salon';
+        return 'Cash Payment';
+    }
+
+    public function getIcon(): string
+    {
+        return '💵';
+    }
+
+    public function getDescription(): string
+    {
+        return 'Pay with cash when you arrive at the salon';
+    }
+
+    public function getFormFields(): array
+    {
+        return [
+            [
+                'type' => 'info',
+                'content' => 'You can pay with cash when you arrive at the salon. Please bring the exact amount or have change ready.',
+                'class' => 'alert alert-info'
+            ]
+        ];
+    }
+
+    public function getClientValidationRules(): array
+    {
+        return []; // No validation needed for cash
     }
 
     public function validatePaymentData(array $paymentData): array
     {
-        // Cash payments don't require additional validation
-        return [
-            'valid' => true,
-            'errors' => []
-        ];
+        return ['valid' => true, 'errors' => []]; // Always valid for cash
     }
 }

@@ -492,6 +492,10 @@
                             @auth
                             <li><a href="{{ route('bookings.index') }}">My Bookings</a></li>
                             <li><a href="{{ route('payments.history') }}">Payment History</a></li>
+                             <a href="{{ route('refunds.refund') }}" class="nav-link">
+                             <i class="fas fa-undo"></i>
+                                     My Refunds
+                                </a>
                             <li>
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf

@@ -199,7 +199,7 @@
                         @endif
                     </dl>
 
-                    <footer class="row-actions">
+                 <footer class="row-actions">
                         @if($canCancel)
                             <form method="POST" action="{{ route('booking.cancel', $b) }}" 
                                   onsubmit="return confirm('Cancel this booking?');">
@@ -207,11 +207,20 @@
                                 @method('PATCH')
                                 <button type="submit" class="btn btn-danger">Cancel Booking</button>
                             </form>
+                        @elseif($b->canBeRefunded())
+                            <a href="{{ route('refunds.create', ['booking_id' => $b->id]) }}" 
+                               class="btn btn-primary">Request Refund</a>
                         @else
                             @if($isCancelled)
                                 <button class="btn btn-muted" disabled>Already Cancelled</button>
                             @elseif($isCompleted)
-                                <button class="btn btn-muted" disabled>Completed</button>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn btn-muted" disabled>Completed</button>
+                                    @if($b->canBeRefunded())
+                                        <a href="{{ route('refunds.create', ['booking_id' => $b->id]) }}" 
+                                           class="btn btn-primary">Request Refund</a>
+                                    @endif
+                                </div>
                             @else
                                 <button class="btn btn-muted" disabled>Cannot Cancel (too close to appointment)</button>
                             @endif
