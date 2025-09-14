@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ServiceApiController;
+use App\Http\Controllers\Api\InventoryApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,6 +46,14 @@ Route::prefix('service-data')->group(function () {
     Route::post('/services/{id}/notify-update', [ServiceApiController::class, 'notifyServiceUpdate']);
 });
 
+
+Route::prefix('v1')->group(function () {
+    Route::get('/items',                        [InventoryApiController::class, 'indexItems']);
+    Route::get('/items/{id}',                   [InventoryApiController::class, 'showItem']);
+    Route::get('/services/{id}/requirements',   [InventoryApiController::class, 'requirements']);
+    Route::get('/services/{id}/stock-check',    [InventoryApiController::class, 'stockCheck']);
+    Route::post('/inventory/reserve',           [InventoryApiController::class, 'reserveForBooking']);
+});
 /* 
 HOW INVENTORY MODULE WILL CONSUME THIS API:
 
