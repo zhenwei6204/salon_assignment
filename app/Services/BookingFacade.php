@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
 use Carbon\Carbon;
 use App\Mail\BookingConfirmationMail;
 use App\Mail\BookingCancelledMail;
+use App\Http\Controllers\Api\InventoryApiController;
+use Illuminate\Http\Request as HttpRequest;
 
 class BookingFacade
 {
@@ -98,6 +100,47 @@ class BookingFacade
             $b->booking_reference = $reference;
             $b->total_price       = $priceSnapshot;
             $b->save();
+
+            // Try to reserve inventory for this booking
+            try {
+                $inventory = app(\App\Http\Controllers\Api\InventoryApiController::class);
+                $reserveReq = new \Illuminate\Http\Request([
+                    'service_id' => $service->id,
+                    'booking_id' => $b->id,
+                    'user_id'    => $actingUser->id,
+                ]);
+                
+                $response = $inventory->reserveForBooking($reserveReq);
+                
+                // Check if the response indicates an error
+                if (method_exists($response, 'getStatusCode') && $response->getStatusCode() >= 400) {
+                    $payload = method_exists($response, 'getData') ? $response->getData(true) : null;
+                    $message = $payload['message'] ?? 'Insufficient stock for this booking.';
+                    
+                    // Log the detailed error for debugging
+                    Log::error('Inventory reservation failed', [
+                        'booking_id' => $b->id,
+                        'service_id' => $service->id,
+                        'status_code' => $response->getStatusCode(),
+                        'response' => $payload,
+                    ]);
+                    
+                    throw new \RuntimeException($message);
+                }
+                
+            } catch (\RuntimeException $e) {
+                // Re-throw RuntimeExceptions (like insufficient stock) to be handled by the outer try-catch
+                throw $e;
+            } catch (\Throwable $e) {
+                // Log unexpected inventory errors
+                Log::error('Unexpected inventory error during booking', [
+                    'booking_id' => $b->id,
+                    'service_id' => $service->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                throw new \RuntimeException('Unable to reserve inventory for this booking. Please try again.');
+            }
 
             return $b;
         });
@@ -199,8 +242,6 @@ class BookingFacade
         $ts = strtotime((string)$value);
         return $ts ? date('H:i:s', $ts) : '00:00:00';
     }
-
-
 
     /**
      * Check the stylist's availability for the given period.

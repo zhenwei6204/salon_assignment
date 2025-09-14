@@ -197,18 +197,18 @@
                                 <span class="text-danger">{{ $message }}</span>
                             @enderror
                         </div>
-                        <div class="form-group">
-                            <label for="bank_name">Bank Name <span class="required">*</span></label>
-                                <select id="bank_name" name="bank_name" class="form-control" required>
-                                    <option value="" disabled selected>-- Select a Bank --</option>
-                                    @foreach($banks as $bank)
-                                        <option value="{{ $bank }}">{{ $bank }}</option>
-                                    @endforeach
-                                </select>
-                            @error('bank_name')
-                                <span class="text-danger">{{ $message }}</span>
-                            @enderror
-                        </div>
+                       <div class="form-group">
+    <label for="bank_name">Bank Name <span class="required">*</span></label>
+    <select id="bank_name" name="bank_name" class="form-control">
+        <option value="">-- Select a Bank --</option>
+        @foreach($banks as $bank)
+            <option value="{{ $bank }}" {{ old('bank_name') == $bank ? 'selected' : '' }}>{{ $bank }}</option>
+        @endforeach
+    </select>
+    @error('bank_name')
+        <span class="text-danger">{{ $message }}</span>
+    @enderror
+</div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -285,10 +285,15 @@
 </div>
 
 <script>
+
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle payment method change
+    console.log('Payment form initialized');
+    
+    // Get all form elements
     const paymentMethods = document.querySelectorAll('input[name="payment_method"]');
     const detailsForms = document.querySelectorAll('.payment-details-form');
+    const paymentForm = document.getElementById('payment-form');
 
     function showPaymentDetails() {
         const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
@@ -307,111 +312,149 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Add event listeners to payment method radio buttons
     paymentMethods.forEach(method => {
         method.addEventListener('change', showPaymentDetails);
     });
 
-    // Show details for initially selected method
+    // Show initial payment details
     showPaymentDetails();
 
-    // Form validation
-    document.getElementById('payment-form').addEventListener('submit', function(e) {
-        const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+    // FIXED: Add specific event listener for bank name select
+    const bankSelect = document.getElementById('bank_name');
+    if (bankSelect) {
+        // Remove the 'required' attribute that might be causing issues
+        bankSelect.removeAttribute('required');
         
-        if (!selectedMethod) {
-            e.preventDefault();
-            alert('Please select a payment method.');
-            return;
+        // Add change event listener for debugging
+        bankSelect.addEventListener('change', function() {
+            console.log('Bank selected:', this.value);
+        });
+    }
+
+    // Form submission handler
+    if (paymentForm) {
+        paymentForm.addEventListener('submit', function(e) {
+            const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+            
+            if (!selectedMethod) {
+                e.preventDefault();
+                alert('Please select a payment method.');
+                return false;
+            }
+
+            console.log('Submitting payment for:', selectedMethod.value);
+
+            // Validation logic
+            let isValid = true;
+            let errorMessage = '';
+
+            switch (selectedMethod.value) {
+                case 'credit_card':
+                    const cardInputs = {
+                        cardNumber: document.getElementById('card_number'),
+                        expiryDate: document.getElementById('expiry_date'),
+                        cvv: document.getElementById('cvv'),
+                        cardholderName: document.getElementById('cardholder_name')
+                    };
+                    
+                    for (let [key, input] of Object.entries(cardInputs)) {
+                        if (!input || !input.value.trim()) {
+                            isValid = false;
+                            errorMessage = 'Please fill in all credit card details.';
+                            break;
+                        }
+                    }
+                    break;
+
+                case 'paypal':
+                    const paypalEmail = document.getElementById('paypal_email');
+                    if (!paypalEmail || !paypalEmail.value.trim()) {
+                        isValid = false;
+                        errorMessage = 'Please enter your PayPal email.';
+                    }
+                    break;
+
+                case 'bank_transfer':
+                    const bankInputs = {
+                        accountHolderName: document.getElementById('account_holder_name'),
+                        bankName: document.getElementById('bank_name'),
+                        accountNumber: document.getElementById('account_number')
+                    };
+                    
+                    for (let [key, input] of Object.entries(bankInputs)) {
+                        if (!input || !input.value.trim()) {
+                            isValid = false;
+                            errorMessage = 'Please fill in all required bank transfer details.';
+                            break;
+                        }
+                    }
+                    break;
+
+                case 'cash':
+                    // No validation needed
+                    isValid = true;
+                    break;
+            }
+
+            if (!isValid) {
+                e.preventDefault();
+                alert(errorMessage);
+                return false;
+            }
+
+            console.log('Form validation passed - submitting');
+            return true;
+        });
+    }
+
+    // Input formatting
+    const formatters = [
+        {
+            element: document.getElementById('card_number'),
+            formatter: function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+                e.target.value = value;
+            }
+        },
+        {
+            element: document.getElementById('expiry_date'),
+            formatter: function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length >= 2) {
+                    value = value.substring(0,2) + '/' + value.substring(2,4);
+                }
+                e.target.value = value;
+            }
+        },
+        {
+            element: document.getElementById('cvv'),
+            formatter: function(e) {
+                e.target.value = e.target.value.replace(/\D/g, '');
+            }
+        },
+        {
+            element: document.getElementById('account_number'),
+            formatter: function(e) {
+                e.target.value = e.target.value.replace(/\D/g, '');
+            }
+        },
+        {
+            element: document.getElementById('routing_number'),
+            formatter: function(e) {
+                e.target.value = e.target.value.replace(/\D/g, '');
+            }
         }
+    ];
 
-        // Validate based on selected payment method
-        let isValid = true;
-        let errorMessage = '';
-
-        switch (selectedMethod.value) {
-            case 'credit_card':
-                const cardNumber = document.getElementById('card_number').value.trim();
-                const expiryDate = document.getElementById('expiry_date').value.trim();
-                const cvv = document.getElementById('cvv').value.trim();
-                const cardholderName = document.getElementById('cardholder_name').value.trim();
-
-                if (!cardNumber || !expiryDate || !cvv || !cardholderName) {
-                    isValid = false;
-                    errorMessage = 'Please fill in all credit card details.';
-                }
-                break;
-
-            case 'paypal':
-                const paypalEmail = document.getElementById('paypal_email').value.trim();
-                if (!paypalEmail) {
-                    isValid = false;
-                    errorMessage = 'Please enter your PayPal email.';
-                }
-                break;
-
-            case 'bank_transfer':
-                const accountHolderName = document.getElementById('account_holder_name').value.trim();
-                const bankName = document.getElementById('bank_name').value.trim();
-                const accountNumber = document.getElementById('account_number').value.trim();
-
-                if (!accountHolderName || !bankName || !accountNumber) {
-                    isValid = false;
-                    errorMessage = 'Please fill in all required bank transfer details.';
-                }
-                break;
-        }
-
-        if (!isValid) {
-            e.preventDefault();
-            alert(errorMessage);
+    formatters.forEach(({element, formatter}) => {
+        if (element) {
+            element.addEventListener('input', formatter);
         }
     });
 
-    // Format card number input
-    const cardNumberInput = document.getElementById('card_number');
-    if (cardNumberInput) {
-        cardNumberInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
-            e.target.value = value;
-        });
-    }
-
-    // Format expiry date input
-    const expiryInput = document.getElementById('expiry_date');
-    if (expiryInput) {
-        expiryInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.length >= 2) {
-                value = value.substring(0,2) + '/' + value.substring(2,4);
-            }
-            e.target.value = value;
-        });
-    }
-
-    // Format CVV input (numbers only)
-    const cvvInput = document.getElementById('cvv');
-    if (cvvInput) {
-        cvvInput.addEventListener('input', function(e) {
-            e.target.value = e.target.value.replace(/\D/g, '');
-        });
-    }
-
-    // Format account number (numbers only)
-    const accountNumberInput = document.getElementById('account_number');
-    if (accountNumberInput) {
-        accountNumberInput.addEventListener('input', function(e) {
-            e.target.value = e.target.value.replace(/\D/g, '');
-        });
-    }
-
-    // Format routing number (numbers only)
-    const routingNumberInput = document.getElementById('routing_number');
-    if (routingNumberInput) {
-        routingNumberInput.addEventListener('input', function(e) {
-            e.target.value = e.target.value.replace(/\D/g, '');
-        });
-    }
+    console.log('Payment form setup complete');
 });
 </script>
 
