@@ -7,12 +7,16 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\Stylist;
 use App\Payments\PaymentContext;
+use Illuminate\Support\Facades\Http;
+use App\Http\Controllers\Api\UserApiController;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule; 
+use Illuminate\Support\Facades\Cache; 
+
 
 class PaymentController extends Controller
 {
@@ -357,65 +361,39 @@ public function processPayment(Request $request, $serviceId)
         }
     }
 
-    public function paymentHistory(Request $request)
-    {
+  public function paymentHistory(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        // STEP 1: Get user details from teammate's User Service
+        $userDetails = $this->getUserDetailsFromTeammateService($user->id);
+        
+        // Add fallback if user service is down
+        if (!$userDetails) {
+            $userDetails = $this->getFallbackUserDetails($user->id);
+        }
+        
+        // STEP 2: Get payment data from YOUR OWN internal service
+       
         $query = Payment::with(['booking.service', 'booking.stylist'])
-            ->whereHas('booking', function($q) use ($request) {
-                $q->where('customer_email', $request->user()->email);
+            ->whereHas('booking', function($q) use ($user) {
+                $q->where('customer_email', $user->email);
             });
 
-        // Search by payment reference, booking reference, or service name
-        if ($q = trim($request->get('q', ''))) {
-            $query->where(function ($qBuilder) use ($q) {
-                $qBuilder->where('payment_ref', 'like', "%{$q}%")
-                    ->orWhereHas('booking', function ($booking) use ($q) {
-                        $booking->where('booking_reference', 'like', "%{$q}%")
-                            ->orWhereHas('service', function ($service) use ($q) {
-                                $service->where('name', 'like', "%{$q}%");
-                            });
-                    });
-            });
-        }
+        // Apply filters using internal query
+        $this->applyPaymentFilters($query, $request);
 
-        // Filter by payment method
-        if ($method = $request->get('method')) {
-            if (in_array($method, ['cash', 'credit_card', 'paypal', 'bank_transfer'], true)) {
-                $query->where('payment_method', $method);
-            }
-        }
+        $payments = $query->orderBy('created_at', 'desc')->paginate(10)->withQueryString();
 
-        // Filter by payment status
-        if ($status = $request->get('status')) {
-            if (in_array($status, ['pending', 'completed', 'failed'], true)) {
-                $query->where('status', $status);
-            }
-        }
+        // Calculate statistics using internal service
+        $stats = $this->calculateInternalPaymentStats($user);
 
-        // Date range filter
-        if ($from = $request->get('from')) {
-            $query->whereDate('created_at', '>=', $from);
-        }
-        if ($to = $request->get('to')) {
-            $query->whereDate('created_at', '<=', $to);
-        }
-
-        // Order by newest first
-        $query->orderBy('created_at', 'desc');
-
-        $payments = $query->paginate(10)->withQueryString();
-
-        // Calculate summary statistics
-        $totalPayments = Payment::whereHas('booking', function($q) use ($request) {
-            $q->where('customer_email', $request->user()->email);
-        })->sum('amount');
-
-        $completedPayments = Payment::whereHas('booking', function($q) use ($request) {
-            $q->where('customer_email', $request->user()->email);
-        })->where('status', 'completed')->count();
-
-        $pendingPayments = Payment::whereHas('booking', function($q) use ($request) {
-            $q->where('customer_email', $request->user()->email);
-        })->where('status', 'pending')->count();
+        Log::info('Successfully loaded payment history', [
+            'user_id' => $user->id,
+            'total_payments' => $payments->total(),
+            'user_service_status' => $userDetails ? 'success' : 'fallback'
+        ]);
 
         return view('profile.payment_history', [
             'payments' => $payments,
@@ -426,11 +404,137 @@ public function processPayment(Request $request, $serviceId)
                 'from' => $request->get('from', ''),
                 'to' => $request->get('to', ''),
             ],
+            'stats' => $stats,
+            'user_details' => $userDetails, // From teammate's service
+            'data_source' => 'Internal Payments + External User Service'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Payment history error: ' . $e->getMessage(), [
+            'user_id' => $request->user()->id ?? 'unknown',
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return view('profile.payment_history', [
+            'payments' => collect([]),
+            'filters' => [
+                'q' => $request->get('q', ''),
+                'method' => $request->get('method', ''),
+                'status' => $request->get('status', ''),
+                'from' => $request->get('from', ''),
+                'to' => $request->get('to', ''),
+            ],
             'stats' => [
-                'total_amount' => $totalPayments,
-                'completed_count' => $completedPayments,
-                'pending_count' => $pendingPayments,
-            ]
+                'total_amount' => 0,
+                'completed_count' => 0,
+                'pending_count' => 0,
+                'failed_count' => 0,
+            ],
+            'user_details' => $this->getFallbackUserDetails($request->user()->id ?? 0),
+            'error' => 'Unable to load payment history: ' . $e->getMessage(),
+            'data_source' => 'Fallback Service'
         ]);
     }
+}
+
+/**
+ * Get user details from teammate's User Service (separate from payment data)
+ */
+private function getUserDetailsFromTeammateService($userId)
+{
+    try {
+        $baseUrl = config('services.user_module.base_url');
+        $timeout = config('services.user_module.timeout');
+        
+        $response = Http::timeout($timeout)
+            ->get("{$baseUrl}/api/users/{$userId}");
+        
+        if ($response->successful()) {
+            $data = $response->json();
+            return $data['data'] ?? null;
+        }
+        
+        
+        return null;
+        
+    } catch (\Exception $e) {
+        \Log::error("Error fetching user details: " . $e->getMessage());
+        return null;
+    }
+}
+    private function applyPaymentFilters($query, Request $request)
+    {
+        // Search filter
+        if ($search = $request->get('q')) {
+            $query->where(function($q) use ($search) {
+                $q->where('payment_reference', 'LIKE', "%{$search}%")
+                  ->orWhereHas('booking', function($subQ) use ($search) {
+                      $subQ->where('booking_reference', 'LIKE', "%{$search}%")
+                           ->orWhereHas('service', function($serviceQ) use ($search) {
+                               $serviceQ->where('name', 'LIKE', "%{$search}%");
+                           });
+                  });
+            });
+        }
+
+        // Payment method filter
+        if ($method = $request->get('method')) {
+            $query->where('payment_method', $method);
+        }
+
+        // Status filter
+        if ($status = $request->get('status')) {
+            $query->where('status', $status);
+        }
+
+        // Date range filters
+        if ($from = $request->get('from')) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+
+        if ($to = $request->get('to')) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+    }
+
+    /**
+     * Calculate payment statistics using internal service
+     */
+    private function calculateInternalPaymentStats($user)
+    {
+        $baseQuery = Payment::whereHas('booking', function($q) use ($user) {
+            $q->where('customer_email', $user->email);
+        });
+
+        return [
+            'total_amount' => $baseQuery->where('status', 'completed')->sum('amount'),
+            'completed_count' => $baseQuery->where('status', 'completed')->count(),
+            'pending_count' => $baseQuery->where('status', 'pending')->count(),
+            'failed_count' => $baseQuery->where('status', 'failed')->count(),
+        ];
+    }
+
+    
+    /**
+     * Get fallback user details when teammate's service fails
+     */
+    private function getFallbackUserDetails($userId)
+    {
+        if (config('services.user_module.enable_fallback', true)) {
+            return [
+               'id' => null, 
+                'name' => config('services.user_module.fallback_user_name', 'Unknown User'),
+                'email' => 'user@example.com',
+                'roles' => 'None',
+                'source' => 'fallback'
+            ];
+              
+             
+               
+            
+        }
+        
+        return null;
+    }
+
 }

@@ -3,69 +3,96 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payment;
+use App\Models\User;
+
+use Illuminate\Http\JsonResponse;
+
 use Illuminate\Http\Request;
 
 class UserApiController extends Controller
 {
-    // Get user payment history (provider API)
-    public function paymentHistory(Request $request)
+    /**
+     * Get user details - API endpoint provided by your teammate
+     * GET /api/users/{id}
+     */
+    public function show($id): JsonResponse
     {
-        $user = $request->user();
+        try {
+            $user = User::find($id);
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not found',
+                    'data' => null
+                ], 404);
+            }
+            
 
-        $query = Payment::with(['booking.service', 'booking.stylist'])
-            ->whereHas('booking', function($q) use ($user) {
-                $q->where('customer_email', $user->email);
-            });
-
-        // Filters (optional: q, method, status, date)
-        if ($search = trim($request->get('q', ''))) {
-            $query->where(function ($qBuilder) use ($search) {
-                $qBuilder->where('payment_ref', 'like', "%{$search}%")
-                    ->orWhere('transaction_id', 'like', "%{$search}%")
-                    ->orWhereHas('booking', function ($booking) use ($search) {
-                        $booking->where('booking_reference', 'like', "%{$search}%")
-                            ->orWhereHas('service', function ($service) use ($search) {
-                                $service->where('name', 'like', "%{$search}%");
-                            });
-                    });
-            });
-        }
-
-        if ($method = $request->get('method')) {
-            $query->where('payment_method', $method);
-        }
-
-        if ($status = $request->get('status')) {
-            $query->where('status', $status);
-        }
-
-        if ($from = $request->get('from')) {
-            $query->whereDate('created_at', '>=', $from);
-        }
-        if ($to = $request->get('to')) {
-            $query->whereDate('created_at', '<=', $to);
-        }
-
-        $payments = $query->orderBy('created_at', 'desc')->paginate(10);
-
-        // Stats
-        $totalPayments = $payments->sum('amount');
-        $completedPayments = $payments->where('status', 'completed')->count();
-        $pendingPayments = $payments->where('status', 'pending')->count();
-
-        return response()->json([
-            'user' => [
+          
+            $userData = [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-            ],
-            'payments' => $payments,
-            'stats' => [
-                'total_amount' => $totalPayments,
-                'completed_count' => $completedPayments,
-                'pending_count' => $pendingPayments,
-            ]
-        ]);
+                'phone' => $user->phone ,
+                'roles' => $user->role ,   
+                
+             
+                'source' => 'User web service',
+                'fetched_at' => now()->toISOString()
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'User details retrieved successfully',
+                'data' => $userData
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to retrieve user details: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user profile - Extended user information
+     * GET /api/users/{id}/profile
+     */
+    public function profile($id): JsonResponse
+    {
+        try {
+            $user = User::find($id);
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            $profileData = [
+                'basic_info' => [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                  
+                ],
+         
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $profileData
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to retrieve user profile'
+            ], 500);
+        }
     }
 }

@@ -16,6 +16,7 @@ use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Models\User;
+
 /*
 |--------------------------------------------------------------------------
 | Public pages
@@ -182,3 +183,15 @@ if(app()->environment('local')){
         return 'User not found';
     });
     }
+    if (app()->environment(['local', 'development', 'testing'])) {
+    Route::middleware(['auth'])->group(function () {
+        // Test consuming teammate's User web service
+        Route::get('/test/user-service-integration', [PaymentController::class, 'testUserServiceIntegration'])
+            ->name('test.user.service');
+            
+        // Test payment history with User service
+        Route::get('/test/payment-history/with-user-service', [PaymentController::class, 'paymentHistory'])
+            ->name('test.payments.with.user.service');
+    });
+}
+

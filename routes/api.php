@@ -20,51 +20,7 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user/payments', [UserApiController::class, 'paymentHistory']);
-});
-/*
-|--------------------------------------------------------------------------
-| Service API Routes - RESTful Routes
-|--------------------------------------------------------------------------
-*/
-Route::prefix('service-data')->group(function () {
-    
-    // Provide all services to inventory module
-    Route::get('/services', [ServiceApiController::class, 'getAllServices']);
-    
-    // Provide specific service details to inventory module
-    Route::get('/services/{id}', [ServiceApiController::class, 'getServiceById']);
-    
-    // Provide services by category to inventory module
-    Route::get('/services/category/{categoryId}', [ServiceApiController::class, 'getServicesByCategory']);
-    
-    // Provide all categories to inventory module
-    Route::get('/categories', [ServiceApiController::class, 'getAllCategories']);
-    
-    // Provide active/available services only
-    Route::get('/services/active', [ServiceApiController::class, 'getActiveServices']);
-    
-    // Webhook endpoint for inventory when service is updated
-    Route::post('/services/{id}/notify-update', [ServiceApiController::class, 'notifyServiceUpdate']);
-});
 
-/* 
-HOW INVENTORY MODULE WILL CONSUME THIS API:
 
-1. Get all services for item linking:
-   GET /api/service-data/services
-   
-2. Get specific service details:
-   GET /api/service-data/services/1
-   
-3. Get services by category:
-   GET /api/service-data/services/category/1
-   
-4. Get all categories:
-   GET /api/service-data/categories
-   
-5. Get only active services:
-   GET /api/service-data/services/active
+Route::get('/users/{id}', [UserApiController::class, 'show']);
 
-*/

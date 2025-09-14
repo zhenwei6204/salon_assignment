@@ -1,7 +1,6 @@
 <?php
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
@@ -14,12 +13,15 @@ return [
     |
     */
 
-    'postmark' => [
-        'token' => env('POSTMARK_TOKEN'),
+    'mailgun' => [
+        'domain' => env('MAILGUN_DOMAIN'),
+        'secret' => env('MAILGUN_SECRET'),
+        'endpoint' => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
+        'scheme' => 'https',
     ],
 
-    'resend' => [
-        'key' => env('RESEND_KEY'),
+    'postmark' => [
+        'token' => env('POSTMARK_TOKEN'),
     ],
 
     'ses' => [
@@ -28,11 +30,35 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'slack' => [
-        'notifications' => [
-            'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
-        ],
+    /*
+    |--------------------------------------------------------------------------
+    | Teammate's User Module Web Service
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for consuming your teammate's User module RESTful API.
+    | Your Payment module will call these endpoints to get user information.
+    |
+    */
+    'user_module' => [
+        // Base URL of your teammate's User service
+        'base_url' => env('USER_SERVICE_BASE_URL', 'http://127.0.0.1:8000'),
+        
+        // API version (if applicable)
+        'api_version' => env('USER_SERVICE_API_VERSION', 'v1'),
+        
+        // Timeout settings
+        'timeout' => env('USER_SERVICE_TIMEOUT', 10),
+        'connect_timeout' => env('USER_SERVICE_CONNECT_TIMEOUT', 5),
+        
+        // Authentication (if required)
+        'api_key' => env('USER_SERVICE_API_KEY'),
+        'api_secret' => env('USER_SERVICE_API_SECRET'),
+      
+      
+        // Fallback settings
+        'enable_fallback' => env('USER_SERVICE_FALLBACK_ENABLED', true),
+        'fallback_user_name' => 'Unknown User',
     ],
+
 
 ];

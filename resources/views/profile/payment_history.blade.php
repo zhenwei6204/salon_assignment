@@ -1,5 +1,4 @@
 @extends('layout.app')
-
 @section('title', 'Payment History')
 
 @section('content')
@@ -8,7 +7,57 @@
     <div class="page-header">
         <h1 class="page-title">Payment History</h1>
         <p class="page-subtitle">Track all your payments and transactions</p>
-    </div>
+        
+@if(isset($user_details) && $user_details)
+    <div class="customer-info-card">
+        <div class="customer-header">
+            <h3 class="customer-title">Customer Information</h3>
+            <div class="service-badge">
+                <span class="badge-icon">🔗</span>
+                <span class="badge-text">External User Service</span>
+            </div>
+        </div>
+        
+        <div class="customer-details-wrapper">
+            <div class="customer-details-grid">
+                <div class="customer-detail-item">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <span class="detail-label">Customer ID</span>
+                        <span class="detail-value customer-id">{{ $user_details['id'] ?? 'N/A' }}</span>
+                    </div>
+                </div>
+                
+                <div class="customer-detail-item">
+                    <div class="detail-icon">📝</div>
+                    <div class="detail-content">
+                        <span class="detail-label">Full Name</span>
+                        <span class="detail-value customer-name">{{ $user_details['name'] ?? 'N/A' }}</span>
+                    </div>
+                </div>
+                
+                <div class="customer-detail-item">
+                    <div class="detail-icon">📧</div>
+                    <div class="detail-content">
+                        <span class="detail-label">Email Address</span>
+                        <span class="detail-value customer-email">{{ $user_details['email'] ?? 'N/A' }}</span>
+                    </div>
+                </div>
+                
+                <div class="customer-detail-item">
+                    <div class="detail-icon">🏷️</div>
+                    <div class="detail-content">
+                        <span class="detail-label">Customer Type</span>
+                        <span class="detail-value">
+                            <span class="customer-role-badge role-{{ strtolower($user_details['role'] ?? 'user') }}">
+                                {{ ($user_details['roles'] ) }}
+                            </span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+   @endif
 
     <!-- Payment Statistics -->
     <div class="stats-grid">
@@ -33,11 +82,24 @@
                 <p>Pending Payments</p>
             </div>
         </div>
+        @if(isset($stats['failed_count']))
+        <div class="stat-card">
+            <div class="stat-icon">❌</div>
+            <div class="stat-content">
+                <h3>{{ $stats['failed_count'] ?? 0 }}</h3>
+                <p>Failed Payments</p>
+            </div>
+        </div>
+        @endif
     </div>
 
     <!-- Filters Section -->
     <div class="filters-section">
         <form method="GET" action="{{ route('payments.history') }}" class="filters-form">
+            @if(request('use_api'))
+                <input type="hidden" name="use_api" value="1">
+            @endif
+            
             <div class="filters-row">
                 <div class="filter-group">
                     <label for="search">Search</label>
@@ -80,7 +142,7 @@
 
                 <div class="filter-actions">
                     <button type="submit" class="filter-btn">Filter</button>
-                    <a href="{{ route('payments.history') }}" class="clear-btn">Clear</a>
+                    <a href="{{ route('payments.history', request()->only('use_api')) }}" class="clear-btn">Clear</a>
                 </div>
             </div>
         </form>
@@ -91,11 +153,40 @@
         @if($payments->count() > 0)
             <div class="payments-grid">
                 @foreach($payments as $payment)
+                    @php
+                        // Handle both object and array data (for API responses)
+                        $paymentObj = is_array($payment) ? (object) $payment : $payment;
+                        $booking = null;
+                        $service = null;
+                        $stylist = null;
+                        
+                        if (is_array($payment) && isset($payment['booking'])) {
+                            $booking = (object) $payment['booking'];
+                            $service = isset($payment['booking']['service']) ? (object) $payment['booking']['service'] : null;
+                            $stylist = isset($payment['booking']['stylist']) ? (object) $payment['booking']['stylist'] : null;
+                        } elseif (is_object($payment) && isset($payment->booking)) {
+                            $booking = $payment->booking;
+                            $service = $payment->booking->service ?? null;
+                            $stylist = $payment->booking->stylist ?? null;
+                        }
+                        
+                        // Get payment method with fallback
+                        $paymentMethod = $paymentObj->payment_method ?? 'default';
+                        $formattedMethod = $paymentObj->formatted_payment_method ?? 
+                            match($paymentMethod) {
+                                'cash' => 'Cash Payment at Salon',
+                                'credit_card' => 'Credit/Debit Card',
+                                'paypal' => 'PayPal',
+                                'bank_transfer' => 'Bank Transfer',
+                                default => 'Payment Method'
+                            };
+                    @endphp
+                    
                     <div class="payment-card">
                         <div class="payment-header">
                             <div class="payment-method">
                                 <span class="method-icon">
-                                    @switch($payment->payment_method ?? 'default')
+                                    @switch($paymentMethod)
                                         @case('cash')
                                             💵
                                             @break
@@ -113,12 +204,13 @@
                                     @endswitch
                                 </span>
                                 <div class="method-details">
-                                    <h4>{{ $payment->formatted_payment_method ?? 'Payment Method' }}</h4>
+                                    <h4>{{ $formattedMethod }}</h4>
                                 </div>
                             </div>
                             <div class="payment-status">
                                 @php
-                                    $statusColor = match($payment->status ?? 'pending') {
+                                    $status = $paymentObj->status ?? 'pending';
+                                    $statusColor = match($status) {
                                         'completed' => 'success',
                                         'pending' => 'warning',
                                         'failed' => 'danger',
@@ -126,37 +218,55 @@
                                     };
                                 @endphp
                                 <span class="status-badge status-{{ $statusColor }}">
-                                    {{ ucfirst($payment->status ?? 'pending') }}
+                                    {{ ucfirst($status) }}
                                 </span>
                             </div>
                         </div>
 
                         <div class="payment-body">
                             <div class="payment-amount">
-                                <span class="amount">${{ number_format($payment->amount ?? 0, 2) }}</span>
+                                <span class="amount">${{ number_format($paymentObj->amount ?? 0, 2) }}</span>
                             </div>
 
                             <div class="payment-details">
                                 <div class="detail-row">
                                     <span class="label">Service:</span>
-                                    <span class="value">{{ $payment->booking->service->name ?? 'N/A' }}</span>
+                                    <span class="value">{{ $service->name ?? 'N/A' }}</span>
                                 </div>
                                 <div class="detail-row">
                                     <span class="label">Stylist:</span>
-                                    <span class="value">{{ $payment->booking->stylist->name ?? 'N/A' }}</span>
+                                    <span class="value">{{ $stylist->name ?? 'N/A' }}</span>
                                 </div>
                                 <div class="detail-row">
                                     <span class="label">Booking Date:</span>
-                                    <span class="value">{{ $payment->booking ? date('M j, Y', strtotime($payment->booking->booking_date)) : 'N/A' }}</span>
+                                    <span class="value">
+                                        @if($booking && isset($booking->booking_date))
+                                            {{ is_string($booking->booking_date) ? date('M j, Y', strtotime($booking->booking_date)) : $booking->booking_date->format('M j, Y') }}
+                                        @else
+                                            N/A
+                                        @endif
+                                    </span>
                                 </div>
                                 <div class="detail-row">
                                     <span class="label">Payment Date:</span>
-                                    <span class="value">{{ $payment->created_at->format('M j, Y \a\t g:i A') }}</span>
+                                    <span class="value">
+                                        @if(isset($paymentObj->created_at))
+                                            {{ is_string($paymentObj->created_at) ? date('M j, Y \a\t g:i A', strtotime($paymentObj->created_at)) : $paymentObj->created_at->format('M j, Y \a\t g:i A') }}
+                                        @else
+                                            N/A
+                                        @endif
+                                    </span>
                                 </div>
-                                @if($payment->id)
+                                @if(isset($paymentObj->id))
                                     <div class="detail-row">
                                         <span class="label">Payment ID:</span>
-                                        <span class="value">{{ $payment->id }}</span>
+                                        <span class="value">#{{ $paymentObj->id }}</span>
+                                    </div>
+                                @endif
+                                @if(isset($booking->booking_reference))
+                                    <div class="detail-row">
+                                        <span class="label">Booking Ref:</span>
+                                        <span class="value">{{ $booking->booking_reference }}</span>
                                     </div>
                                 @endif
                             </div>
@@ -164,21 +274,24 @@
 
                         <div class="payment-footer">
                             <div class="payment-actions">
-                                @if($payment->booking)
-                                    <a href="{{ route('bookings.index') }}?q={{ $payment->booking->booking_reference }}" 
+                                @if($booking && isset($booking->booking_reference))
+                                    <a href="{{ route('bookings.index') }}?q={{ $booking->booking_reference }}" 
                                        class="view-booking-btn">
                                         View Booking
                                     </a>
                                 @endif
                                 
-                                @if(method_exists($payment, 'canBeRefunded') && $payment->canBeRefunded() && $payment->booking)
-                                    <a href="{{ route('refunds.create', ['booking_id' => $payment->booking->id]) }}" 
+                                @if(isset($paymentObj->id) && $status === 'completed' && $booking)
+                                    @php
+                                        $bookingId = is_array($booking) ? $booking['id'] : $booking->id;
+                                    @endphp
+                                    <a href="{{ route('refunds.create', ['booking_id' => $bookingId]) }}" 
                                        class="refund-btn">
                                         Request Refund
                                     </a>
                                 @endif
                                 
-                                @if(method_exists($payment, 'isPending') && method_exists($payment, 'isCashPayment') && $payment->isPending() && $payment->isCashPayment())
+                                @if($status === 'pending' && $paymentMethod === 'cash')
                                     <span class="pending-note">Pay at salon</span>
                                 @endif
                             </div>
@@ -189,7 +302,9 @@
             
             <!-- Pagination -->
             <div class="pagination-wrapper">
-                {{ $payments->links() }}
+                @if(method_exists($payments, 'links'))
+                    {{ $payments->appends(request()->query())->links() }}
+                @endif
             </div>
         @else
             <div class="empty-state">
@@ -198,7 +313,7 @@
                 <p>
                     @if(array_filter($filters ?? []))
                         No payments match your current filters. 
-                        <a href="{{ route('payments.history') }}" class="clear-filters-link">Clear filters</a> to see all payments.
+                        <a href="{{ route('payments.history', request()->only('use_api')) }}" class="clear-filters-link">Clear filters</a> to see all payments.
                     @else
                         You haven't made any payments yet. 
                         <a href="{{ route('services.index') }}" class="book-service-link">Book a service</a> to get started.
@@ -207,6 +322,8 @@
             </div>
         @endif
     </div>
+
+   
 
     <!-- Navigation Links -->
     <div class="page-navigation">
@@ -222,6 +339,177 @@
 </div>
 
 <style>
+:root {
+    --primary-black: #1a1a1a;
+    --soft-black: #333333;
+    --medium-gray: #e0e0e0;
+    --light-gray: #f8f9fa;
+    --border-color: #dee2e6;
+    --transition: all 0.3s ease;
+}
+
+.customer-info-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    margin: 1.5rem 0 3rem 0;
+    transition: var(--transition);
+    border-left: 4px solid var(--primary-black);
+}
+
+.customer-info-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+}
+
+.customer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    background: var(--light-gray);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.customer-title {
+    color: var(--primary-black);
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.service-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #d4edda;
+    color: #155724;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.badge-icon {
+    font-size: 1rem;
+}
+
+.badge-text {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.customer-details-wrapper {
+    padding: 1.5rem;
+}
+
+.customer-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.customer-detail-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--light-gray);
+    border-radius: 10px;
+    transition: var(--transition);
+    border: 2px solid transparent;
+}
+
+.customer-detail-item:hover {
+    background: #fff;
+    border-color: var(--medium-gray);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.detail-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.detail-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.detail-label {
+    font-size: 0.85rem;
+    color: var(--soft-black);
+    opacity: 0.7;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-value {
+    color: var(--primary-black);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.customer-id {
+    font-family: 'Courier New', monospace;
+    color: #1565c0;
+}
+
+.customer-name {
+    color: var(--primary-black);
+}
+
+.customer-email {
+    color: #155724;
+    word-break: break-word;
+}
+
+/* Customer Role Badge - Enhanced */
+.customer-role-badge {
+    display: inline-block;
+    padding: 0.4rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.role-user {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    color: #1565c0;
+}
+
+.role-premium {
+    background: linear-gradient(135deg, #fff3e0, #ffcc02);
+    color: #f57c00;
+}
+
+.role-vip {
+    background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+    color: #7b1fa2;
+}
+
+.role-admin {
+    background: linear-gradient(135deg, #fce4ec, #f8bbd9);
+    color: #c2185b;
+}
+
+/* Existing styles with improvements */
 .refund-btn {
     background: #f59e0b;
     color: white;
@@ -610,6 +898,86 @@
         flex-direction: column;
         align-items: center;
     }
+    
+    .data-source-indicator {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .api-test-buttons {
+        flex-direction: column;
+    }
+
+    .user-service-info {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    margin: 1rem 0;
+}
+
+.user-service-info h3 {
+    color: var(--primary-black);
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.user-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.user-detail {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.user-detail .label {
+    font-weight: 600;
+    color: var(--soft-black);
+}
+
+.user-detail .value {
+    color: var(--primary-black);
+}
+
+.role-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-user {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.role-admin {
+    background: #fce4ec;
+    color: #c2185b;
+}
+
+.role-premium {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.role-vip {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.role-regular {
+    background: #f5f5f5;
+    color: #424242;
+}
 }
 </style>
 @endsection
