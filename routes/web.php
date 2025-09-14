@@ -16,14 +16,17 @@ use App\Http\Controllers\ReviewController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Models\User;
+
+
+use App\Services\ServiceApi;
 /*
 |--------------------------------------------------------------------------
 | Public pages
 |--------------------------------------------------------------------------
 */
 Route::get('/', [HomeController::class, 'home']);
-Route::get('/about', fn () => view('about'));
-Route::get('/contact', fn () => view('contact'));
+Route::get('/about', fn() => view('about'));
+Route::get('/contact', fn() => view('contact'));
 
 /*
 |--------------------------------------------------------------------------
@@ -57,11 +60,11 @@ Route::middleware(['auth'])->prefix('booking')->name('booking.')->group(function
     Route::post('/store', [BookingController::class, 'store'])->name('store');
 
     // Step 5: Payment routes (separate from booking creation)
-    Route::prefix('payment')->name('payment.')->group(function() {
+    Route::prefix('payment')->name('payment.')->group(function () {
         // Show payment page
         Route::get('/{serviceId}', [PaymentController::class, 'makePayment'])
             ->name('makePayment');
-        
+
         // Process payment
         Route::post('/{serviceId}/process', [PaymentController::class, 'processPayment'])
             ->name('process');
@@ -80,10 +83,10 @@ Route::middleware(['auth'])->prefix('booking')->name('booking.')->group(function
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])->get('/my-bookings', [BookingController::class, 'myBookings'])
-    ->name('bookings.index');  
+    ->name('bookings.index');
 
 
-    
+
 Route::middleware(['auth'])->get('/payment-history', [PaymentController::class, 'paymentHistory'])
     ->name('payments.history');
 
@@ -95,7 +98,7 @@ Route::middleware(['auth'])->get('/services/{service}/book', [BookingController:
     ->name('booking.stylists');
 
 
-    Route::middleware(['auth'])->prefix('refunds')->name('refunds.')->group(function () {
+Route::middleware(['auth'])->prefix('refunds')->name('refunds.')->group(function () {
     Route::get('/', [RefundController::class, 'refund'])->name('refund');
     Route::get('/create', [RefundController::class, 'create'])->name('create');
     Route::post('/store', [RefundController::class, 'store'])->name('store');
@@ -112,7 +115,7 @@ Route::middleware([
     config('jetstream.auth_session'),
     'verified',
 ])->group(function () {
-    Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
+    Route::get('/dashboard', fn() => view('dashboard'))->name('dashboard');
 });
 
 /*
@@ -153,13 +156,13 @@ Route::get('/stylists/{stylist}', [StylistController::class, 'show'])->name('sty
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/stylist/dashboard', [StylistDashboardController::class, 'index'])
-         ->name('stylist.dashboard');
+        ->name('stylist.dashboard');
 
     Route::put('/stylist/profile', [StylistDashboardController::class, 'updateProfile'])
-         ->name('stylist.profile.update');
+        ->name('stylist.profile.update');
 
     Route::put('/stylist/schedule', [StylistDashboardController::class, 'updateSchedule'])
-         ->name('stylist.schedule.update');
+        ->name('stylist.schedule.update');
 });
 
 /*
@@ -167,18 +170,24 @@ Route::middleware(['auth'])->group(function () {
 | Admin Logout Site
 |--------------------------------------------------------------------------
 */
-Route::get('/test-logout-binding', function() {
+Route::get('/test-logout-binding', function () {
     $logoutResponse = app(\Filament\Http\Responses\Auth\Contracts\LogoutResponse::class);
     dd(get_class($logoutResponse));
 });
 
-if(app()->environment('local')){
-    Route::get('/test-login/{id}', function($id){
+if (app()->environment('local')) {
+    Route::get('/test-login/{id}', function ($id) {
         $user = User::find($id);
-        if($user){
+        if ($user) {
             Auth::login($user);
             return redirect()->route('stylist.dashboard');
         }
         return 'User not found';
     });
-    }
+
+    
+}
+
+Route::get('/dev/test-services', function (ServiceApi $api) {
+    return response()->json($api->listServices());
+});

@@ -1,37 +1,60 @@
 <?php
+
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Http\Client\RequestException;
+use App\Models\Service;
 
 class ServiceApi
 {
-    private string $base = 'http://service-module.test/api/v1'; // <- teammate’s base
-    private ?string $token = null;     // set if they use Bearer
-    private ?string $staticKey = null; // set if they use X-Service-Key
+    private string $base;
 
-    private function client()
+    public function __construct()
     {
-        $c = Http::acceptJson()->timeout(10);
-        if ($this->token) $c = $c->withToken($this->token);
-        if ($this->staticKey) $c = $c->withHeaders(['X-Service-Key' => $this->staticKey]);
-        return $c;
+        $host = request()?->getSchemeAndHttpHost() ?: config('app.url', 'http://127.0.0.1:8000');
+        $this->base = rtrim(env('SERVICE_API_BASE', $host . '/api/v1'), '/');
+    }
+
+    private function isSameApp(): bool
+    {
+        $current = request()?->getSchemeAndHttpHost();
+        return str_starts_with($this->base, rtrim($current, '/') . '/');
+    }
+
+    private function http()
+    {
+        return Http::acceptJson()->timeout(10);
     }
 
     public function listServices(string $search = '', int $page = 1): array
     {
-        return Cache::remember("svc:list:$search:$page", 300, function () use ($search, $page) {
-            $res = $this->client()->get($this->base.'/services', ['search'=>$search,'page'=>$page])->throw();
-            return $res->json(); // e.g. ['data'=>[...]] or [...]
-        });
+        // Fallback to DB if base == current host (avoids deadlock on php dev server)
+        if ($this->isSameApp()) {
+            $q = Service::query()->select('id', 'name', 'active');
+            if ($search !== '') {
+                $q->where('name', 'like', "%{$search}%");
+            }
+            $items = $q->orderBy('name')->limit(50)->get()
+                ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'active' => (bool) $s->active])
+                ->toArray();
+
+            return ['data' => $items, 'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 50, 'total' => count($items)]];
+        }
+
+        // Real HTTP call when pointing to another service / port
+        $params = ['page' => $page];
+        if ($search !== '') $params['search'] = $search;
+
+        return $this->http()->get("{$this->base}/services", $params)->throw()->json();
     }
 
     public function getService(int $id): ?array
     {
-        return Cache::remember("svc:get:$id", 600, function () use ($id) {
-            try { return $this->client()->get($this->base."/services/$id")->throw()->json(); }
-            catch (RequestException) { return null; }
-        });
+        if ($this->isSameApp()) {
+            $s = Service::find($id);
+            return $s ? ['id' => $s->id, 'name' => $s->name, 'active' => (bool) $s->active] : null;
+        }
+
+        return $this->http()->get("{$this->base}/services/{$id}")->throw()->json();
     }
 }

@@ -121,9 +121,9 @@ Route::middleware(['auth:sanctum','throttle:60,1'])->group(function () {
 | Check Servivce 
 |--------------------------------------------------------------------------
 */
-Route::prefix('api/v1')
-    ->middleware(['service.key','throttle:60,1'])   // or 'auth:sanctum'
-    ->group(function () {
-        Route::get('/services', [ServiceApiController::class, 'index']);
-        Route::get('/services/{service}', [ServiceApiController::class, 'show']);
-    });
+Route::prefix('v1')->group(function () {
+    Route::get('/services', [ServiceApiController::class, 'index']);
+    Route::get('/services/{service}', [ServiceApiController::class, 'show']);
+}); 
+
+

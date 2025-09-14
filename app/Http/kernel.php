@@ -24,6 +24,8 @@ class Kernel extends HttpKernel
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
+
+        'service.key' => \App\Http\Middleware\ServiceApiKey::class,
     ];
 
     protected $routeMiddleware = [
