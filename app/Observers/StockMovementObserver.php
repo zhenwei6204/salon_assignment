@@ -10,22 +10,22 @@ use InvalidArgumentException;
 
 class StockMovementObserver
 {
-    // Hardcoded admin email(s) per your requirement (no env / config).
+    
     private const ADMIN_EMAILS = ['darentester123@gmail.com'];
 
-    /** Before save: snapshot/hide names for audit rows */
+    
     public function creating(StockMovement $m): void
     {
         $src = $m->source ?? '';
 
         if ($src === 'item_deleted') {
-            // Force no relation and no name for "deleted" audit rows
+           
             $m->item_id   = null;
             $m->item_name = null;
             return;
         }
 
-        // Snapshot item name if not provided
+        
         if (!$m->item_name && $m->item_id) {
             if ($item = Item::find($m->item_id)) {
                 $m->item_name = $item->name;
@@ -61,7 +61,7 @@ class StockMovementObserver
 
         DB::transaction(function () use ($m) {
 
-            // Item switched
+          
             if ($m->wasChanged('item_id')) {
                 $oldItemId = $m->getOriginal('item_id');
                 $oldType   = $m->getOriginal('type');
@@ -96,7 +96,7 @@ class StockMovementObserver
                 return;
             }
 
-            // Same item; type/qty changed
+         
             $item = $m->item_id ? Item::whereKey($m->item_id)->lockForUpdate()->first() : null;
             if (!$item) return;
 
@@ -142,9 +142,9 @@ class StockMovementObserver
 
     private function shouldApply(StockMovement $m): bool
     {
-        if (!$m->item_id) return false; // audit-only (like item_deleted)
+        if (!$m->item_id) return false; 
         $src = $m->source ?? '';
-        // Do not apply stock math for audit rows
+       
         if (in_array($src, ['item_deleted', 'opening_balance'])) return false;
         return true;
     }
@@ -153,14 +153,14 @@ class StockMovementObserver
     {
         $threshold = (int) ($item->reorder_level ?? 5);
 
-        // Crossing from >= threshold to < threshold → send once
+       
         if ($previous >= $threshold && $item->stock < $threshold && is_null($item->low_stock_notified_at)) {
             Mail::to(self::ADMIN_EMAILS)->send(new LowStockAlert($item));
             $item->forceFill(['low_stock_notified_at' => now()])->saveQuietly();
             return;
         }
 
-        // Recovered from < threshold back to >= threshold → clear flag
+        
         if ($item->stock >= $threshold && $item->low_stock_notified_at) {
             $item->forceFill(['low_stock_notified_at' => null])->saveQuietly();
         }
