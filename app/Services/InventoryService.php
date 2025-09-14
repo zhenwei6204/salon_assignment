@@ -10,27 +10,20 @@ use InvalidArgumentException;
 
 class InventoryService
 {
-    /** Deduct items when a booking is completed */
+ 
     public function deductForBooking(Booking $booking): void
     {
         if ($booking->inventory_deducted_at) {
-            return; // already processed
+            return; 
         }
 
         DB::transaction(function () use ($booking) {
-            // Ensure relations are loaded
+          
             $booking->loadMissing('service.consumedItems');
 
             foreach ($booking->service->consumedItems as $item) {
                 $qty = (int) $item->pivot->qty_per_service;
 
-                // (Optional proactive check; model will also enforce)
-                // $locked = Item::whereKey($item->id)->lockForUpdate()->first();
-                // if ($locked->stock - $qty < 0) {
-                //     throw new InvalidArgumentException("Insufficient stock for {$item->name}.");
-                // }
-
-                // Do NOT decrement stock here — let StockMovement events handle stock math
                 StockMovement::create([
                     'item_id'    => $item->id,
                     'booking_id' => $booking->id,
@@ -49,11 +42,11 @@ class InventoryService
         });
     }
 
-    /** Revert items when a deducted booking is cancelled */
+
     public function revertForBooking(Booking $booking): void
     {
         if (! $booking->inventory_deducted_at || $booking->inventory_reverted_at) {
-            return; // nothing to revert or already reverted
+            return; 
         }
 
         DB::transaction(function () use ($booking) {
@@ -62,11 +55,10 @@ class InventoryService
             foreach ($booking->service->consumedItems as $item) {
                 $qty = (int) $item->pivot->qty_per_service;
 
-                // Do NOT increment stock here — let StockMovement events handle stock math
                 StockMovement::create([
                     'item_id'    => $item->id,
                     'booking_id' => $booking->id,
-                    'type'       => StockMovement::TYPE_IN, // 'in'
+                    'type'       => StockMovement::TYPE_IN, 
                     'qty'        => $qty,
                     'reason'     => "Booking #{$booking->id} cancelled, stock returned",
                     'source'     => 'booking',
