@@ -8,12 +8,11 @@ use App\Models\Stylist;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use App\Mail\BookingConfirmationMail;
 use App\Mail\BookingCancelledMail;
-use App\Http\Controllers\Api\InventoryApiController;
-use Illuminate\Http\Request as HttpRequest;
 
 class BookingFacade
 {
@@ -101,49 +100,49 @@ class BookingFacade
             $b->total_price       = $priceSnapshot;
             $b->save();
 
-            // Try to reserve inventory for this booking
-            try {
-                $inventory = app(\App\Http\Controllers\Api\InventoryApiController::class);
-                $reserveReq = new \Illuminate\Http\Request([
-                    'service_id' => $service->id,
-                    'booking_id' => $b->id,
-                    'user_id'    => $actingUser->id,
-                ]);
-                
-                $response = $inventory->reserveForBooking($reserveReq);
-                
-                // Check if the response indicates an error
-                if (method_exists($response, 'getStatusCode') && $response->getStatusCode() >= 400) {
-                    $payload = method_exists($response, 'getData') ? $response->getData(true) : null;
-                    $message = $payload['message'] ?? 'Insufficient stock for this booking.';
-                    
-                    // Log the detailed error for debugging
-                    Log::error('Inventory reservation failed', [
-                        'booking_id' => $b->id,
-                        'service_id' => $service->id,
-                        'status_code' => $response->getStatusCode(),
-                        'response' => $payload,
-                    ]);
-                    
-                    throw new \RuntimeException($message);
-                }
-                
-            } catch (\RuntimeException $e) {
-                // Re-throw RuntimeExceptions (like insufficient stock) to be handled by the outer try-catch
-                throw $e;
-            } catch (\Throwable $e) {
-                // Log unexpected inventory errors
-                Log::error('Unexpected inventory error during booking', [
-                    'booking_id' => $b->id,
-                    'service_id' => $service->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-                throw new \RuntimeException('Unable to reserve inventory for this booking. Please try again.');
-            }
-
             return $b;
         });
+
+        // Try to reserve inventory for this booking AFTER the booking is committed
+        try {
+            $reservationResult = $this->reserveInventoryForBooking($service->id, $booking->id, $actingUser->id);
+            
+            if (!$reservationResult['success']) {
+                // If inventory reservation fails, cancel the booking
+                $booking->status = 'cancelled';
+                $booking->save();
+                
+                Log::error('Inventory reservation failed, booking cancelled', [
+                    'booking_id' => $booking->id,
+                    'service_id' => $service->id,
+                    'error' => $reservationResult['message'],
+                    'details' => $reservationResult['details'] ?? null,
+                ]);
+                
+                throw new \RuntimeException($reservationResult['message']);
+            }
+            
+            Log::info('Inventory reserved successfully', [
+                'booking_id' => $booking->id,
+                'service_id' => $service->id,
+            ]);
+            
+        } catch (\RuntimeException $e) {
+            // Re-throw RuntimeExceptions (like insufficient stock) to be handled by the outer try-catch
+            throw $e;
+        } catch (\Throwable $e) {
+            // If inventory reservation fails unexpectedly, cancel the booking
+            $booking->status = 'cancelled';
+            $booking->save();
+            
+            Log::error('Unexpected inventory error during booking, booking cancelled', [
+                'booking_id' => $booking->id,
+                'service_id' => $service->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw new \RuntimeException('Unable to reserve inventory for this booking. Please try again.');
+        }
 
         // Send confirmation email (best-effort: do not block success if mail fails)
         try {
@@ -278,5 +277,133 @@ class BookingFacade
     protected function buildReference(): string
     {
         return 'BKG-' . now()->format('Ymd') . '-' . strtoupper(Str::random(5));
+    }
+
+    /**
+     * Check inventory stock availability for a service
+     */
+    public function checkInventoryStock(int $serviceId): array
+    {
+        try {
+            $response = $this->callInventoryApi('GET', "/api/v1/services/{$serviceId}/stock-check");
+            
+            if ($response && isset($response['ok'])) {
+                return [
+                    'available' => $response['ok'],
+                    'message' => $response['message'],
+                    'insufficient' => $response['insufficient'] ?? []
+                ];
+            }
+            
+            return ['available' => true, 'message' => 'Stock check unavailable'];
+        } catch (\Exception $e) {
+            Log::warning('Inventory stock check failed', [
+                'service_id' => $serviceId,
+                'error' => $e->getMessage()
+            ]);
+            return ['available' => true, 'message' => 'Stock check failed, proceeding'];
+        }
+    }
+
+    /**
+     * Get inventory requirements for a service
+     */
+    public function getInventoryRequirements(int $serviceId): array
+    {
+        try {
+            $response = $this->callInventoryApi('GET', "/api/v1/services/{$serviceId}/requirements");
+            
+            if ($response && isset($response['requirements'])) {
+                return $response['requirements'];
+            }
+            
+            return [];
+        } catch (\Exception $e) {
+            Log::warning('Failed to get inventory requirements', [
+                'service_id' => $serviceId,
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Reserve inventory for a booking through API
+     */
+    private function reserveInventoryForBooking(int $serviceId, int $bookingId, int $userId): array
+    {
+        try {
+            $response = $this->callInventoryApi('POST', '/api/v1/inventory/reserve', [
+                'service_id' => $serviceId,
+                'booking_id' => $bookingId,
+                'user_id' => $userId,
+            ]);
+            
+            if ($response && isset($response['ok'])) {
+                return [
+                    'success' => $response['ok'],
+                    'message' => $response['message'],
+                    'details' => $response['insufficient'] ?? null
+                ];
+            }
+            
+            return [
+                'success' => false,
+                'message' => 'Failed to reserve inventory'
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Inventory reservation error: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Make HTTP calls to internal API endpoints using Laravel HTTP client
+     */
+    private function callInventoryApi(string $method, string $endpoint, array $data = []): ?array
+    {
+        try {
+            // Use port 8001 for local development API calls
+            // You can also use config('app.url') but ensure it includes port 8001
+            $baseUrl = config('app.env') === 'local' 
+                ? 'http://localhost:8001' 
+                : config('app.url');
+            $fullUrl = $baseUrl . $endpoint;
+            
+            $request = Http::timeout(10)
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ]);
+
+            $response = match(strtoupper($method)) {
+                'GET' => $request->get($fullUrl),
+                'POST' => $request->post($fullUrl, $data),
+                'PUT' => $request->put($fullUrl, $data),
+                'DELETE' => $request->delete($fullUrl),
+                default => throw new \InvalidArgumentException("Unsupported HTTP method: {$method}")
+            };
+            
+            if ($response->successful()) {
+                return $response->json();
+            }
+            
+            // Handle error responses
+            if ($response->failed()) {
+                $errorData = $response->json();
+                
+                if (isset($errorData['message'])) {
+                    throw new \RuntimeException($errorData['message']);
+                }
+                
+                throw new \RuntimeException('Inventory API call failed with status: ' . $response->status());
+            }
+            
+            return null;
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            throw new \RuntimeException('Inventory API request failed: ' . $e->getMessage());
+        }
     }
 }

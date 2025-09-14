@@ -276,75 +276,114 @@ class BookingController extends Controller
         }
     }
 
+    /**
+     * Build available time slots for a service with a specific stylist on a given date
+     */
+    private function buildAvailableSlots(Service $service, Stylist $stylist, string $selectedDate): array
+    {
+        $duration = (int) ($service->duration ?? 60); // Default 60 minutes if not set
+        $tz = config('app.timezone');
+        $now = now($tz);
+        
+        // Business hours (you can make this configurable)
+        $businessStart = Carbon::parse($selectedDate . ' 09:00:00', $tz);
+        $businessEnd = Carbon::parse($selectedDate . ' 18:00:00', $tz);
+        
+        // Get existing bookings for this stylist on the selected date
+        $existingBookings = Booking::where('stylist_id', $stylist->id)
+            ->whereDate('booking_date', $selectedDate)
+            ->where('status', '!=', 'cancelled')
+            ->get(['booking_time', 'end_time']);
+        
+        // Build busy intervals
+        $busy = collect();
+        
+        foreach ($existingBookings as $booking) {
+            $startTime = $this->extractTime($booking->booking_time);
+            $endTime = $this->extractTime($booking->end_time);
+            
+            $bStart = Carbon::parse($selectedDate . ' ' . $startTime, $tz);
+            $bEnd = Carbon::parse($selectedDate . ' ' . $endTime, $tz);
+            
+            $busy->push([$bStart, $bEnd]);
+        }
+        
+        // Add lunch break (12:00 - 13:00)
+        if ($businessStart->format('Y-m-d') === $selectedDate) {
+            $lunchStart = Carbon::parse($selectedDate . ' 12:00:00', $tz);
+            $lunchEnd = Carbon::parse($selectedDate . ' 13:00:00', $tz);
+            $busy->push([$lunchStart, $lunchEnd]);
+        }
+        
+        // Generate available slots
+        $slots = [];
+        for ($cursor = $businessStart->copy(); $cursor->lt($businessEnd); $cursor->addMinutes($duration)) {
+            $slotStart = $cursor->copy();
+            $slotEnd = $cursor->copy()->addMinutes($duration);
+            
+            if ($slotEnd->gt($businessEnd)) {
+                break; // Slot would extend beyond business hours
+            }
+            
+            // If the selected date is today, check if the slot time has already passed
+            if ($businessStart->isToday() && $slotStart->isBefore($now->addMinutes(5))) {
+                continue; // Skip past slots (with 5-minute buffer)
+            }
+            
+            // Check if this slot overlaps with any busy interval
+            $overlaps = $busy->first(function ($interval) use ($slotStart, $slotEnd) {
+                return $slotStart->lt($interval[1]) && $slotEnd->gt($interval[0]);
+            });
+            
+            if (!$overlaps) {
+                $slots[] = $slotStart->format('H:i');
+            }
+        }
+        
+        return $slots;
+    }
+
 
     /**
- * Helper: build available slots for a day/stylist/service duration
+ * Helper method to call internal inventory API
  */
-private function buildAvailableSlots(Service $service, Stylist $stylist, string $date): array
+private function callInventoryApi(string $method, string $endpoint, array $data = []): ?array
 {
-    $duration = (int)($service->duration ?? 0);
-    if ($duration <= 0) return [];
-
-    $appTimezone = config('app.timezone');
-    $now = \Carbon\Carbon::now($appTimezone);
-
-    // Use stylist's working hours, not business hours
-    // If stylist hasn't set their hours, default to business hours
-    $stylistStart = $stylist->start_time ?? '09:00:00';
-    $stylistEnd = $stylist->end_time ?? '18:00:00';
-
-    // Extract just the time part if it's a datetime string
-    $stylistStart = $this->extractTime($stylistStart);
-    $stylistEnd = $this->extractTime($stylistEnd);
-
-    $businessStart = \Carbon\Carbon::parse($date . ' '. $stylistStart, $appTimezone);
-    $businessEnd   = \Carbon\Carbon::parse($date . ' '. $stylistEnd, $appTimezone);
-
-    // Fetch existing bookings for the selected date
-    $bookings = Booking::where('stylist_id', $stylist->id)
-        ->whereDate('booking_date', $date)
-        ->where('status', '!=', 'cancelled')
-        ->get(['booking_time', 'end_time']);
-
-    $busy = $bookings->map(function($b) use ($date, $appTimezone) {
-        $startTime = $this->extractTime($b->booking_time);
-        $endTime = $this->extractTime($b->end_time);
+    try {
+        // Use port 8001 for local development API calls
+        // You can also use config('app.url') but ensure it includes port 8001
+        $baseUrl = config('app.env') === 'local' 
+            ? 'http://localhost:8001' 
+            : config('app.url');
+        $fullUrl = $baseUrl . $endpoint;
         
-        return [
-            \Carbon\Carbon::parse($date . ' ' . $startTime, $appTimezone),
-            \Carbon\Carbon::parse($date . ' ' . $endTime, $appTimezone),
-        ];
-    });
+        $request = \Illuminate\Support\Facades\Http::timeout(10)
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ]);
 
-    // Add lunch break to busy intervals if lunch times are set
-    if ($stylist->lunch_start && $stylist->lunch_end) {
-        $lunchStartTime = $this->extractTime($stylist->lunch_start);
-        $lunchEndTime = $this->extractTime($stylist->lunch_end);
+        $response = match(strtoupper($method)) {
+            'GET' => $request->get($fullUrl),
+            'POST' => $request->post($fullUrl, $data),
+            'PUT' => $request->put($fullUrl, $data),
+            'DELETE' => $request->delete($fullUrl),
+            default => throw new \InvalidArgumentException("Unsupported HTTP method: {$method}")
+        };
         
-        $lunchStart = \Carbon\Carbon::parse($date . ' ' . $lunchStartTime, $appTimezone);
-        $lunchEnd = \Carbon\Carbon::parse($date . ' ' . $lunchEndTime, $appTimezone);
-    
-        $busy->push([$lunchStart, $lunchEnd]);
-    }
-
-    $slots = [];
-    for ($cursor = $businessStart->copy(); $cursor->lt($businessEnd); $cursor->addMinutes($duration)) {
-        $slotStart = $cursor->copy();
-        $slotEnd   = $cursor->copy()->addMinutes($duration);
-        if ($slotEnd->gt($businessEnd)) break;
-
-        // If the selected date is today, check if the slot time has already passed.
-        if ($businessStart->isToday() && $slotStart->isBefore($now->addMinutes(5))) {
-            continue;
+        if ($response->successful()) {
+            return $response->json();
         }
-
-        $overlaps = $busy->first(fn($int) => $slotStart->lt($int[1]) && $slotEnd->gt($int[0]));
-        if (!$overlaps) {
-            $slots[] = $slotStart->format('H:i');
-        }
+        
+        return null;
+    } catch (\Exception $e) {
+        Log::error('Inventory API call failed', [
+            'method' => $method,
+            'endpoint' => $endpoint,
+            'error' => $e->getMessage()
+        ]);
+        return null;
     }
-
-    return $slots;
 }
 
 // Helper method to extract time from datetime string

@@ -64,11 +64,22 @@ class InventoryApiController extends Controller
     {
         $data = $req->validate([
             'service_id' => 'required|exists:services,id',
-            'booking_id' => 'nullable|exists:bookings,id',
+            'booking_id' => 'nullable|integer',  // Changed from exists:bookings,id to just integer
             'user_id'    => 'nullable|exists:users,id',
         ]);
 
         $service = Service::findOrFail($data['service_id']);
+
+        // Optional: Verify booking exists if booking_id is provided
+        if (!empty($data['booking_id'])) {
+            $booking = Booking::find($data['booking_id']);
+            if (!$booking) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Booking not found',
+                ], 404);
+            }
+        }
 
         $needs = DB::table('service_item_consumptions')
             ->select('item_id', DB::raw('SUM(qty_per_service) need_dec'))

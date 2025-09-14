@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ServiceApiController;
 use App\Http\Controllers\Api\InventoryApiController;
+use App\Http\Controllers\Api\InventoryTestController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,6 +54,16 @@ Route::prefix('v1')->group(function () {
     Route::get('/services/{id}/requirements',   [InventoryApiController::class, 'requirements']);
     Route::get('/services/{id}/stock-check',    [InventoryApiController::class, 'stockCheck']);
     Route::post('/inventory/reserve',           [InventoryApiController::class, 'reserveForBooking']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Test Routes for Inventory API Consumption
+|--------------------------------------------------------------------------
+*/
+Route::prefix('test')->group(function () {
+    Route::get('/inventory/stock-check/{serviceId}', [InventoryTestController::class, 'testStockCheck']);
+    Route::post('/inventory/reservation-test', [InventoryTestController::class, 'testReservation']);
 });
 /* 
 HOW INVENTORY MODULE WILL CONSUME THIS API:

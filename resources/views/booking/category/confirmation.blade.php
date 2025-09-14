@@ -59,6 +59,140 @@
             @endif
         </div>
 
+        {{-- Inventory Information --}}
+        @if(!empty($inventoryRequirements) || isset($stockStatus))
+        <div class="inventory-status-summary">
+            <h3>🔧 Service Requirements</h3>
+            
+            @if(!empty($inventoryRequirements))
+                <div class="inventory-requirements">
+                    <p class="text-sm text-gray-600 mb-2">This service requires the following items:</p>
+                    <div class="requirements-list">
+                        @foreach($inventoryRequirements as $requirement)
+                            <div class="requirement-item">
+                                <span class="item-name">{{ $requirement['item_name'] }}</span>
+                                <span class="requirement-details">
+                                    ({{ $requirement['need'] }} {{ $requirement['unit'] }} needed,
+                                    {{ $requirement['stock'] }} in stock)
+                                </span>
+                                @if($requirement['stock'] < $requirement['need'])
+                                    <span class="stock-warning">⚠️ Low Stock</span>
+                                @else
+                                    <span class="stock-ok">✅ Available</span>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            @if(isset($stockStatus))
+                <div class="stock-status">
+                    @if($stockStatus['ok'] ?? true)
+                        <div class="status-available">
+                            <span class="status-icon">✅</span>
+                            <span class="status-text">All required items are available</span>
+                        </div>
+                    @else
+                        <div class="status-insufficient">
+                            <span class="status-icon">⚠️</span>
+                            <span class="status-text">{{ $stockStatus['message'] ?? 'Some items may be insufficient' }}</span>
+                            @if(!empty($stockStatus['insufficient']))
+                                <div class="insufficient-items">
+                                    <p class="text-sm">Insufficient stock for:</p>
+                                    @foreach($stockStatus['insufficient'] as $item)
+                                        <span class="insufficient-item">{{ $item['item_name'] ?? 'Item ' . $item['item_id'] }}</span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            @endif
+        </div>
+
+        <style>
+            .inventory-status-summary {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 16px 0;
+            }
+            .requirements-list {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .requirement-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
+            }
+            .item-name {
+                font-weight: 600;
+                color: #374151;
+            }
+            .requirement-details {
+                font-size: 0.875rem;
+                color: #6b7280;
+                flex: 1;
+            }
+            .stock-warning {
+                background: #fef3c7;
+                color: #92400e;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+            .stock-ok {
+                background: #d1fae5;
+                color: #065f46;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+            .status-available {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px;
+                background: #d1fae5;
+                border: 1px solid #a7f3d0;
+                border-radius: 8px;
+                color: #065f46;
+            }
+            .status-insufficient {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                padding: 12px;
+                background: #fef3c7;
+                border: 1px solid #fde68a;
+                border-radius: 8px;
+                color: #92400e;
+            }
+            .insufficient-items {
+                margin-top: 8px;
+            }
+            .insufficient-item {
+                display: inline-block;
+                background: #fed7aa;
+                color: #9a3412;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                margin-right: 4px;
+            }
+        </style>
+        @endif
+
         {{-- Styles for form/errors/buttons --}}
         <style>
             .bf-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px}
