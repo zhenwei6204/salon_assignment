@@ -21,38 +21,8 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
-/*
-|--------------------------------------------------------------------------
-| Service API Routes - Public Access (for your teammates)
-|--------------------------------------------------------------------------
-*/
 
-// Service CRUD operations
-Route::prefix('services')->group(function () {
-    // GET /api/services - List all services with filters
-    Route::get('/', [ServiceApiController::class, 'index']);
-    
-    // GET /api/services/categories - Get all service categories (MUST come before {id} route)
-    Route::get('/categories', [ServiceApiController::class, 'getCategories']);
-    
-    // GET /api/services/by-duration/{duration} - Get services by max duration
-    Route::get('/by-duration/{duration}', [ServiceApiController::class, 'getByDuration']);
-    
-    // GET /api/services/by-price?min=50&max=100 - Get services by price range
-    Route::get('/by-price', [ServiceApiController::class, 'getByPriceRange']);
-    
-    // GET /api/services/{id} - Get specific service (MUST come last among GET routes)
-    Route::get('/{id}', [ServiceApiController::class, 'show']);
-    
-    // POST /api/services - Create new service (protected)
-    Route::post('/', [ServiceApiController::class, 'store'])->middleware('auth:sanctum');
-    
-    // PUT /api/services/{id} - Update service (protected)
-    Route::put('/{id}', [ServiceApiController::class, 'update'])->middleware('auth:sanctum');
-    
-    // DELETE /api/services/{id} - Delete service (protected)
-    Route::delete('/{id}', [ServiceApiController::class, 'destroy'])->middleware('auth:sanctum');
-});
+
 
 /*
 |--------------------------------------------------------------------------
@@ -174,8 +144,13 @@ Route::get('/users/{id}', [UserApiController::class, 'show']);
 |--------------------------------------------------------------------------
 */
 Route::prefix('v1')->group(function () {
-    Route::get('/services', [ServiceApiController::class, 'index']);
-    Route::get('/services/{service}', [ServiceApiController::class, 'show']);
-}); 
+   
+    Route::get('/services', [ServiceApiController::class, 'index'])
+        ->name('services.index');
+
+    Route::get('/services/{service}', [ServiceApiController::class, 'show'])
+        ->whereNumber('service')
+        ->name('services.show');
+});
 
 

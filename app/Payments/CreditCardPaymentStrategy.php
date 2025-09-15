@@ -14,18 +14,7 @@ class CreditCardPaymentStrategy implements PaymentStrategyInterface
            'payment_data' => Arr::except($paymentData, ['card_number', 'cvv'])
         ]);
 
-        // Validate payment data first
-        $validation = $this->validatePaymentData($paymentData);
-        if (!$validation['valid']) {
-            return [
-                'success' => false,
-                'message' => 'Validation failed: ' . implode(', ', $validation['errors']),
-                'payment_method' => 'credit_card',
-                'amount' => $amount,
-                'payment_status' => 'failed',
-                'errors' => $validation['errors']
-            ];
-        }
+   
 
         // Simulate credit card processing
         $success = $this->simulateCreditCardProcessing($amount, $paymentData);

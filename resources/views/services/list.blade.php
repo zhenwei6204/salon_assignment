@@ -35,7 +35,7 @@
     <div class="search-filter-section animate-on-scroll">
         <div class="search-bar">
             <form method="GET" action="{{ route('services.index') }}" id="searchForm">
-                <!-- Preserve existing filters -->
+                @csrf
                 @if(request('category'))
                     <input type="hidden" name="category" value="{{ request('category') }}">
                 @endif
@@ -50,7 +50,10 @@
                        name="search" 
                        class="search-input" 
                        placeholder="Search services..." 
-                       value="{{ request('search') }}">
+                        value="{{ htmlspecialchars(request('search'), ENT_QUOTES, 'UTF-8') }}"
+                        maxlength="100"
+                        pattern="[a-zA-Z0-9\s\-]+"
+                        title="Only letters, numbers, spaces, and hyphens allowed">
                 <button type="submit" class="search-btn">
                     <span><i class="fas fa-search"></i> Search</span>
                 </button>

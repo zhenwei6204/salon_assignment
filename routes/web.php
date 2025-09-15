@@ -58,14 +58,16 @@ Route::middleware(['auth'])->prefix('booking')->name('booking.')->group(function
     Route::post('/store', [BookingController::class, 'store'])->name('store');
 
     // Step 5: Payment routes (separate from booking creation)
-    Route::prefix('payment')->name('payment.')->group(function () {
+  // Step 5: Payment routes (separate from booking creation)
+    Route::prefix('payment')->name('payment.')->middleware(['throttle:10,1'])->group(function () {
         // Show payment page
         Route::get('/{serviceId}', [PaymentController::class, 'makePayment'])
             ->name('makePayment');
 
-        // Process payment
+        // Process payment (stricter throttling)
         Route::post('/{serviceId}/process', [PaymentController::class, 'processPayment'])
-            ->name('process');
+            ->name('process')
+            ->middleware('throttle:3,5'); // 3 attempts per 5 minutes
     });
 
     // Step 6: Success page (called after successful payment)

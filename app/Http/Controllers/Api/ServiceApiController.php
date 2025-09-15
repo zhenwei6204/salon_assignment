@@ -7,35 +7,34 @@ use Illuminate\Http\Request;
 
 class ServiceApiController extends Controller
 {
-    public function index(Request $request)
+   public function index(Request $request)
     {
-        $q = Service::query()->select('id', 'name', 'is_available');
+        $search = trim((string) $request->query('search', ''));
+        $perPage = (int) ($request->integer('per_page') ?: 25);
 
-        if ($search = trim($request->query('search', ''))) {
-            $q->where('name', 'like', "%{$search}%");
-        }
-
-        $perPage = min(50, (int) $request->query('per_page', 20));
-        $page    = (int) $request->query('page', 1);
-
-        $p = $q->orderBy('name')->paginate($perPage, ['*'], 'page', $page);
-
-        $data = collect($p->items())->map(fn ($s) => [
-            'id'     => $s['id'],
-            'name'   => $s['name'],
-            'active' => (bool) ($s['is_available'] ?? 0),
-        ])->values();
+        $p = Service::query()
+            ->select('id', 'name', 'is_available')
+            ->when($search !== '', fn($q) => $q->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->paginate($perPage);
 
         return response()->json([
-            'data' => $data,
+            'data' => $p->getCollection()
+                ->map(fn($s) => [
+                    'id' => (int) $s->id,
+                    'name' => (string) $s->name,
+                    'active' => (bool) ($s->is_available ?? 0),
+                ])
+                ->values(),
             'meta' => [
                 'current_page' => $p->currentPage(),
-                'last_page'    => $p->lastPage(),
-                'per_page'     => $p->perPage(),
-                'total'        => $p->total(),
+                'last_page' => $p->lastPage(),
+                'per_page' => $p->perPage(),
+                'total' => $p->total(),
             ],
         ]);
     }
+
 
     public function show(Service $service)
     {

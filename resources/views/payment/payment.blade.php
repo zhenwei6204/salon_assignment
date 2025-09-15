@@ -94,6 +94,8 @@
             <h3>Payment Method</h3>
             <form action="{{ route('booking.payment.process', ['serviceId' => $service->id]) }}" method="POST" id="payment-form">
                 @csrf
+                 
+        
 
                 <!-- Payment Method Selection -->
                 <div class="payment-methods">

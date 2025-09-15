@@ -10,19 +10,25 @@ class ServiceController extends Controller
 {
     public function index(Request $request)
 {
+     $sanitizer = new \App\Security\InputSanitizer();
     $query = Service::query()->where('is_available', true)->with('category');
     
     // Category filter
     if ($request->filled('category')) {
-        $query->where('category_id', $request->category);
+        $categoryId = $sanitizer->sanitizeInteger($request->category);
+        if ($categoryId) {
+            $query->where('category_id', $categoryId);
+        }
     }
     
-    // Search filter
-    if ($request->filled('search')) {
-        $query->where(function($q) use ($request) {
-            $q->where('name', 'like', '%' . $request->search . '%')
-              ->orWhere('description', 'like', '%' . $request->search . '%');
-        });
+     if ($request->filled('search')) {
+        $search = $sanitizer->sanitizeSearchInput($request->search);
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', '%' . addslashes($search) . '%')
+                  ->orWhere('description', 'like', '%' . addslashes($search) . '%');
+            });
+        }
     }
     
     // Price range filter

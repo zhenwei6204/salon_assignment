@@ -112,4 +112,52 @@ class Booking extends Model
     {
         return ucfirst(str_replace('_', ' ', $this->status));
     }
+
+        public function refunds()
+{
+    return $this->hasMany(Refund::class);
+}
+
+public function hasRefund()
+{
+    return $this->refunds()->exists();
+}
+
+public function canBeRefunded()
+{
+    // Check if booking status allows refunds
+    if (!in_array($this->status, ['booked', 'completed','cancelled'])) {
+        return false;
+    }
+    
+    // Check if booking has a payment
+    if (!$this->payment) {
+        return false;
+    }
+    
+    // Check if payment is completed
+    if ($this->payment->status !== 'completed') {
+        return false;
+    }
+    
+    // Check if there are no pending/processing refunds
+    if ($this->refunds()->whereIn('status', ['pending', 'approved', 'processing'])->exists()) {
+        return false;
+    }
+    
+    // Check if total refund amount is less than payment amount
+    if ($this->totalRefundAmount() >= $this->payment->amount) {
+        return false;
+    }
+    
+    return true;
+}
+
+public function totalRefundAmount()
+{
+    return $this->refunds()
+        ->whereIn('status', ['completed', 'approved', 'processing'])
+        ->sum('refund_amount');
+}
+
 }
