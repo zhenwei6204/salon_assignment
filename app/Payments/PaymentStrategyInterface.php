@@ -19,11 +19,7 @@ interface PaymentStrategyInterface
      */
     public function validatePaymentData(array $paymentData): array;
 
-    /**
-     * Get form fields configuration for this payment method
-     * Returns array of field configurations
-     */
-    public function getFormFields(): array;
+   
 
     /**
      * Get payment method icon/emoji
@@ -35,8 +31,5 @@ interface PaymentStrategyInterface
      */
     public function getDescription(): string;
 
-    /**
-     * Get client-side validation rules (optional)
-     */
-    public function getClientValidationRules(): array;
+ 
 }

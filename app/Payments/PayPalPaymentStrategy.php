@@ -60,30 +60,7 @@ class PayPalPaymentStrategy implements PaymentStrategyInterface
         return 'Pay with your PayPal account';
     }
 
-    public function getFormFields(): array
-    {
-        return [
-            [
-                'name' => 'paypal_email',
-                'type' => 'email',
-                'label' => 'PayPal Email',
-                'placeholder' => 'your.email@example.com',
-                'required' => true,
-                'validation' => 'required|email',
-                'class' => 'form-control'
-            ]
-        ];
-    }
-
-    public function getClientValidationRules(): array
-    {
-        return [
-            'paypal_email' => [
-                'required' => true,
-                'email' => true
-            ]
-        ];
-    }
+    
 
     public function validatePaymentData(array $paymentData): array
     {

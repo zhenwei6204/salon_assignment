@@ -38,23 +38,8 @@ class CashPaymentStrategy implements PaymentStrategyInterface
         return 'Pay with cash when you arrive at the salon';
     }
 
-    public function getFormFields(): array
-    {
-        return [
-            [
-                'type' => 'info',
-                'content' => 'You can pay with cash when you arrive at the salon. Please bring the exact amount or have change ready.',
-                'class' => 'alert alert-info'
-            ]
-        ];
-    }
-
-    public function getClientValidationRules(): array
-    {
-        return []; // No validation needed for cash
-    }
-
-    public function validatePaymentData(array $paymentData): array
+   
+    public function     (array $paymentData): array
     {
         return ['valid' => true, 'errors' => []]; // Always valid for cash
     }

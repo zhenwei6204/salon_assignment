@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Booking Cancelled - {{ config('app.name') }}</title>
+    @php
+        $appName = config('app.name');
+        $brand = ($appName && $appName !== 'Laravel') ? $appName : 'Salon Good';
+    @endphp
+    <title>Booking Cancelled - {{ $brand }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 </head>
 <body style="margin:0;padding:0;background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
@@ -21,9 +25,9 @@
                         <table role="presentation" width="100%">
                             <tr>
                                 <td style="font-weight:800;color:#ffffff;font-size:18px;line-height:1.2;">
-                                    🌟 {{ config('app.name', 'Salon Good') }}
+                                        {{ $brand }}
                                     <div style="color:#9ca3af;font-size:12px;margin-top:2px;font-weight:400;">
-                                        Your booking update
+                                        Booking cancelled
                                     </div>
                                 </td>
                                 <td align="right" style="vertical-align:middle;">

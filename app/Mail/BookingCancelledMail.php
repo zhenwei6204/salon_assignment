@@ -20,7 +20,10 @@ class BookingCancelledMail extends Mailable
 
     public function build()
     {
-        return $this->subject('Booking Cancelled - ' . config('app.name'))
+        $appName = config('app.name');
+        $brand = ($appName && $appName !== 'Laravel') ? $appName : 'Salon Good';
+
+        return $this->subject('Booking Cancelled - ' . $brand)
                     ->view('emails.booking_cancelled'); // <- new blade
     }
 }

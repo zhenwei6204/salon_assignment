@@ -165,8 +165,7 @@ class PaymentContext
                     'name' => $strategy->getPaymentMethodName(),
                     'icon' => $strategy->getIcon(),
                     'description' => $strategy->getDescription(),
-                    'form_fields' => $strategy->getFormFields(),
-                    'validation_rules' => $strategy->getClientValidationRules(),
+                   
                     'class' => $strategyClass
                 ];
             } catch (\Exception $e) {
