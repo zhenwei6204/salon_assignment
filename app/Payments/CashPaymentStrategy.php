@@ -39,7 +39,7 @@ class CashPaymentStrategy implements PaymentStrategyInterface
     }
 
    
-    public function     (array $paymentData): array
+    public function validatePaymentData(array $paymentData): array
     {
         return ['valid' => true, 'errors' => []]; // Always valid for cash
     }
